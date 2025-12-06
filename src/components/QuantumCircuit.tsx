@@ -45,25 +45,71 @@ const getGateColor = (name: string, type: string): string => {
 
 /**
  * Parse steps into circuit gates for visualization
+ * Each step from history becomes one column in the circuit
  */
 function parseStepsToGates(steps: QuantumStep[]): CircuitGate[] {
   const gates: CircuitGate[] = [];
   
   steps.forEach((step, column) => {
+    const desc = step.description.toLowerCase();
+    
     if (step.operation) {
+      // Step has explicit gate operation
       gates.push({
         name: step.operation.label || step.operation.name,
         qubits: step.operation.qubits,
         column,
         type: step.type,
-        label: step.operation.label
+        label: step.description
       });
-    } else if (step.type === 'measurement' && step.qubitIndex !== undefined) {
+    } else if (step.type === 'measurement') {
+      // Measurement step
+      let qubits = step.qubitIndex !== undefined ? [step.qubitIndex] : [0];
+      // Try to extract syndrome info
+      const syndromeMatch = desc.match(/\((\d+),\s*(\d+)\)/);
       gates.push({
-        name: 'M',
-        qubits: [step.qubitIndex],
+        name: syndromeMatch ? `S:${syndromeMatch[1]}${syndromeMatch[2]}` : 'M',
+        qubits,
         column,
-        type: 'measurement'
+        type: 'measurement',
+        label: step.description
+      });
+    } else {
+      // Other steps (encode, noise, correction, decode, etc.)
+      let name = step.type.substring(0, 3).toUpperCase();
+      let qubits: number[] = [0];
+      
+      // Try to extract qubit info from description
+      const qubitMatch = desc.match(/q[_]?(\d+)/i) || desc.match(/qubit\s*(\d+)/i);
+      if (qubitMatch) {
+        qubits = [parseInt(qubitMatch[1])];
+      }
+      
+      // Determine display name from description
+      if (desc.includes('initialize')) {
+        name = 'INIT';
+      } else if (desc.includes('encoded') || desc.includes('encoding')) {
+        name = 'ENC';
+      } else if (desc.includes('decoded') || desc.includes('decoding')) {
+        name = 'DEC';
+      } else if (desc.includes('x error') || desc.includes('bit-flip')) {
+        name = 'X!';
+      } else if (desc.includes('z error') || desc.includes('phase-flip')) {
+        name = 'Z!';
+      } else if (desc.includes('y error')) {
+        name = 'Y!';
+      } else if (desc.includes('corrected') || desc.includes('correction')) {
+        name = '✓';
+      } else if (desc.includes('no error')) {
+        name = '—';
+      }
+      
+      gates.push({
+        name,
+        qubits,
+        column,
+        type: step.type,
+        label: step.description
       });
     }
   });
@@ -93,11 +139,11 @@ const GateBox: React.FC<{
       style={{ cursor: onClick ? 'pointer' : 'default' }}
     >
       <motion.rect
-        x={x - 20}
-        y={y - 18}
-        width={40}
-        height={36}
-        rx={6}
+        x={x - 18}
+        y={y - 15}
+        width={36}
+        height={30}
+        rx={5}
         fill={isActive ? color : `${color}88`}
         stroke={color}
         strokeWidth={isActive ? 2 : 1}
@@ -107,10 +153,10 @@ const GateBox: React.FC<{
       />
       <text
         x={x}
-        y={y + 5}
+        y={y + 4}
         textAnchor="middle"
         fill="white"
-        fontSize={displayName.length > 2 ? 10 : 14}
+        fontSize={displayName.length > 2 ? 9 : 12}
         fontFamily="monospace"
         fontWeight="bold"
       >
@@ -201,28 +247,28 @@ const MeasurementGate: React.FC<{
       animate={{ scale: 1, opacity: 1 }}
     >
       <rect
-        x={x - 20}
-        y={y - 18}
-        width={40}
-        height={36}
-        rx={6}
+        x={x - 18}
+        y={y - 15}
+        width={36}
+        height={30}
+        rx={5}
         fill={isActive ? color : `${color}88`}
         stroke={color}
         strokeWidth={isActive ? 2 : 1}
       />
       {/* Meter arc */}
       <path
-        d={`M ${x - 10} ${y + 8} A 12 12 0 0 1 ${x + 10} ${y + 8}`}
+        d={`M ${x - 8} ${y + 5} A 10 10 0 0 1 ${x + 8} ${y + 5}`}
         fill="none"
         stroke="white"
-        strokeWidth={2}
+        strokeWidth={1.5}
       />
       {/* Meter needle */}
       <line
         x1={x}
-        y1={y + 8}
-        x2={x + 6}
-        y2={y - 6}
+        y1={y + 5}
+        x2={x + 5}
+        y2={y - 4}
         stroke="white"
         strokeWidth={2}
       />
@@ -253,15 +299,20 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
   const gates = parseStepsToGates(steps);
   const numColumns = Math.max(gates.length > 0 ? Math.max(...gates.map(g => g.column)) + 1 : 1, 1);
   
-  const wireSpacing = 60;
-  const columnWidth = 70;
-  const padding = { left: 80, right: 40, top: 40, bottom: 40 };
+  const wireSpacing = 50;
+  const columnWidth = 50;
+  const padding = { left: 60, right: 30, top: 30, bottom: 30 };
   
-  const width = padding.left + numColumns * columnWidth + padding.right;
+  const width = Math.max(padding.left + numColumns * columnWidth + padding.right, 500);
   const height = padding.top + (numQubits - 1) * wireSpacing + padding.bottom;
   
   const getQubitY = (qubit: number) => padding.top + qubit * wireSpacing;
   const getColumnX = (column: number) => padding.left + column * columnWidth + columnWidth / 2;
+  
+  // Current step is 1-indexed (1 = first step done), column is 0-indexed
+  const currentColumnIndex = currentStep !== undefined && currentStep > 0 
+    ? currentStep - 1 
+    : -1;
   
   return (
     <div className="w-full overflow-x-auto bg-slate-900/50 rounded-xl p-4">
@@ -329,7 +380,10 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
         {/* Gates */}
         {gates.map((gate, idx) => {
           const x = getColumnX(gate.column);
-          const isActive = currentStep === undefined || gate.column <= currentStep;
+          // Gate is active if it's been executed (column < currentStep)
+          const isExecuted = currentStep === undefined || gate.column < currentStep;
+          const isCurrent = gate.column === currentColumnIndex;
+          const isActive = isExecuted || isCurrent;
           
           // Handle CNOT/CZ (two-qubit gates)
           if ((gate.name.includes('CNOT') || gate.name === 'CZ') && gate.qubits.length === 2) {
@@ -345,15 +399,15 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             );
           }
           
-          // Handle measurement
-          if (gate.name === 'M') {
+          // Handle measurement (including syndrome)
+          if (gate.name === 'M' || gate.name.startsWith('S:')) {
             return (
               <MeasurementGate
                 key={idx}
                 x={x}
                 y={getQubitY(gate.qubits[0])}
                 isActive={isActive}
-                result={steps[gate.column]?.measurementResult}
+                result={gate.name.startsWith('S:') ? undefined : steps[gate.column]?.measurementResult}
               />
             );
           }
@@ -371,21 +425,33 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
           ));
         })}
         
-        {/* Current step indicator */}
-        {currentStep !== undefined && currentStep < steps.length && (
+        {/* Progress indicator line */}
+        {gates.length > 0 && currentColumnIndex >= 0 && (
+          <line
+            x1={padding.left - 15}
+            y1={height - 5}
+            x2={getColumnX(Math.min(currentColumnIndex, numColumns - 1)) + columnWidth / 2}
+            y2={height - 5}
+            stroke="#22c55e"
+            strokeWidth={4}
+            strokeLinecap="round"
+          />
+        )}
+        
+        {/* Current step highlight - box around current gate */}
+        {currentColumnIndex >= 0 && currentColumnIndex < numColumns && (
           <motion.rect
-            x={getColumnX(currentStep) - columnWidth / 2 + 5}
-            y={padding.top - 25}
-            width={columnWidth - 10}
-            height={height - padding.top - padding.bottom + 50}
-            rx={8}
-            fill="none"
+            x={getColumnX(currentColumnIndex) - columnWidth / 2 + 2}
+            y={padding.top - 20}
+            width={columnWidth - 4}
+            height={height - padding.top - padding.bottom + 40}
+            rx={6}
+            fill="rgba(34, 197, 94, 0.1)"
             stroke="#22c55e"
             strokeWidth={2}
-            strokeDasharray="8,4"
             initial={{ opacity: 0 }}
-            animate={{ opacity: [0.3, 0.7, 0.3] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
           />
         )}
       </svg>

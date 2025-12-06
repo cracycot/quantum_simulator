@@ -33,7 +33,13 @@ export const QBERChart: React.FC<QBERChartProps> = ({
 }) => {
   // Generate theoretical curves
   const theoreticalData = useMemo(() => {
-    const points = [];
+    const points: Array<{
+      physicalError: number;
+      noCorrection: number;
+      repetition: number;
+      shor: number;
+      experimental?: number;
+    }> = [];
     for (let p = 0; p <= 0.5; p += 0.01) {
       points.push({
         physicalError: p * 100,
@@ -64,9 +70,15 @@ export const QBERChart: React.FC<QBERChartProps> = ({
     experimentalData.forEach(exp => {
       const idx = combined.findIndex(t => Math.abs(t.physicalError - exp.physicalError) < 0.5);
       if (idx >= 0) {
-        combined[idx] = { ...combined[idx], ...exp };
+        combined[idx] = { ...combined[idx], experimental: exp.experimental };
       } else {
-        combined.push(exp as typeof combined[0]);
+        combined.push({ 
+          physicalError: exp.physicalError, 
+          noCorrection: exp.physicalError, 
+          repetition: 0, 
+          shor: 0,
+          experimental: exp.experimental 
+        });
       }
     });
     return combined.sort((a, b) => a.physicalError - b.physicalError);
@@ -106,6 +118,7 @@ export const QBERChart: React.FC<QBERChartProps> = ({
             <XAxis 
               dataKey="physicalError" 
               stroke="#94a3b8"
+              tickFormatter={(value) => Math.round(value).toString()}
               label={{ value: 'Физическая ошибка (%)', position: 'bottom', fill: '#94a3b8' }}
             />
             <YAxis 
@@ -194,8 +207,13 @@ export const QBERIndicator: React.FC<QBERIndicatorProps> = ({
   physicalError,
   logicalError
 }) => {
-  const improvement = physicalError > 0 ? ((physicalError - logicalError) / physicalError * 100) : 0;
-  const isEffective = logicalError < physicalError;
+  // Determine color based on logical error value
+  const getLogicalErrorColor = () => {
+    if (logicalError < 0.01) return 'text-green-400'; // 0% - success
+    if (logicalError > 0.99) return 'text-red-400';   // 100% - complete failure
+    if (logicalError < physicalError) return 'text-green-400'; // Improvement
+    return 'text-amber-400'; // Partial failure
+  };
   
   return (
     <div className="bg-slate-800/50 rounded-xl p-4 space-y-2">
@@ -205,15 +223,8 @@ export const QBERIndicator: React.FC<QBERIndicatorProps> = ({
       </div>
       <div className="flex justify-between items-center">
         <span className="text-slate-400 text-sm">Логическая ошибка</span>
-        <span className={`font-mono ${isEffective ? 'text-green-400' : 'text-red-400'}`}>
+        <span className={`font-mono ${getLogicalErrorColor()}`}>
           {(logicalError * 100).toFixed(1)}%
-        </span>
-      </div>
-      <div className="h-px bg-slate-700" />
-      <div className="flex justify-between items-center">
-        <span className="text-slate-400 text-sm">Улучшение</span>
-        <span className={`font-mono ${improvement > 0 ? 'text-green-400' : 'text-red-400'}`}>
-          {improvement > 0 ? '+' : ''}{improvement.toFixed(1)}%
         </span>
       </div>
     </div>

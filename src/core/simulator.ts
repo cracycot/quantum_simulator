@@ -173,6 +173,16 @@ export class QECSimulator {
     const { system, config } = this.state;
     const events = applyNoise(system, config.noiseConfig);
     this.state.noiseEvents = events;
+    
+    // Count applied errors and log summary
+    const appliedErrors = events.filter(e => e.applied);
+    if (appliedErrors.length === 0 && config.noiseConfig.type !== 'none') {
+      system.logStep('noise', 'No errors occurred (probabilistic)');
+    } else if (appliedErrors.length > 1 && config.codeType === 'repetition') {
+      // Warning: multiple errors exceed correction capability
+      system.logStep('noise', `⚠️ ${appliedErrors.length} errors applied - exceeds correction capability!`);
+    }
+    
     this.state.phase = 'noise';
     this.saveSnapshot();
     return events;
@@ -220,18 +230,37 @@ export class QECSimulator {
    * Apply error correction based on syndrome
    */
   correct(): number[] {
-    const { system, config, syndrome } = this.state;
+    const { system, config, syndrome, noiseEvents } = this.state;
     let correctedQubits: number[] = [];
+    const appliedErrors = noiseEvents.filter(e => e.applied);
     
     if (config.codeType === 'repetition') {
       const result = correctErrorRepetition(system, syndrome as [number, number]);
       if (result !== null) {
         correctedQubits = [result];
       }
+      
+      // Check for errors exceeding correction capability
+      if (appliedErrors.length >= 2) {
+        if (syndrome[0] === 0 && syndrome[1] === 0) {
+          // 3 errors: all qubits flipped, looks like valid codeword
+          system.logStep('correction', `⚠️ Логическая ошибка: ${appliedErrors.length} ошибок вызвали необнаруживаемый переход состояния`);
+        } else {
+          // 2 errors: syndrome points to wrong qubit, correction makes it worse
+          system.logStep('correction', `⚠️ Неправильная коррекция: ${appliedErrors.length} ошибок превышают возможности кода (исправляется только 1 ошибка)`);
+        }
+      } else if (correctedQubits.length === 0) {
+        system.logStep('correction', 'Ошибок не обнаружено - коррекция не требуется');
+      }
     } else {
       const result = measureAndCorrectShor(system);
       this.state.syndrome = [...result.bitFlipSyndrome, ...result.phaseFlipSyndrome];
       correctedQubits = [...result.bitCorrected, ...result.phaseCorrected];
+      
+      // Check for Shor code correction limits
+      if (appliedErrors.length >= 2) {
+        system.logStep('correction', `⚠️ ${appliedErrors.length} ошибок могут превышать возможности коррекции`);
+      }
     }
     
     this.state.correctedQubits = correctedQubits;

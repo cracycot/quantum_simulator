@@ -1,8 +1,8 @@
 /**
  * Event Log Component
  */
-import React, { useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useRef } from 'react';
+import { motion } from 'framer-motion';
 import { 
   Activity, 
   AlertTriangle, 
@@ -43,13 +43,10 @@ export const EventLog: React.FC<EventLogProps> = ({
   maxHeight = 400
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
-  
-  // Auto-scroll to bottom when new steps are added
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [steps.length]);
+  const currentItemRef = useRef<HTMLDivElement>(null);
+
+  // Determine which steps to show (all steps, but dim future ones)
+  const currentStepIndex = currentStep !== undefined ? currentStep - 1 : steps.length - 1;
 
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
@@ -59,7 +56,7 @@ export const EventLog: React.FC<EventLogProps> = ({
           Лог событий
         </h3>
         <span className="text-xs text-slate-500">
-          {steps.length} операций
+          {currentStep !== undefined ? `${Math.min(currentStep, steps.length)}/${steps.length}` : `${steps.length}`} операций
         </span>
       </div>
       
@@ -68,35 +65,44 @@ export const EventLog: React.FC<EventLogProps> = ({
         className="p-2 space-y-1 overflow-y-auto"
         style={{ maxHeight }}
       >
-        <AnimatePresence>
-          {steps.map((step, idx) => (
+        {steps.map((step, idx) => {
+          const isCurrentStep = idx === currentStepIndex;
+          const isPastStep = idx < currentStepIndex;
+          const isFutureStep = idx > currentStepIndex;
+          
+          return (
             <motion.div
               key={`${step.timestamp}-${idx}`}
+              ref={isCurrentStep ? currentItemRef : null}
               initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
+              animate={{ 
+                opacity: isFutureStep ? 0.3 : 1, 
+                x: 0,
+                scale: isCurrentStep ? 1.02 : 1
+              }}
               transition={{ duration: 0.2 }}
-              className={`p-2 rounded-lg ${stepColors[step.type]} ${
-                currentStep === idx ? 'ring-2 ring-cyan-400' : ''
-              }`}
+              className={`p-2 rounded-lg transition-all ${stepColors[step.type]} ${
+                isCurrentStep ? 'ring-2 ring-cyan-400 shadow-lg shadow-cyan-500/20' : ''
+              } ${isFutureStep ? 'opacity-30' : ''}`}
             >
               <div className="flex items-start gap-2">
-                <div className={stepColors[step.type].split(' ')[0]}>
+                <div className={`${stepColors[step.type].split(' ')[0]} ${isFutureStep ? 'opacity-50' : ''}`}>
                   {stepIcons[step.type]}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-slate-300">
                       {step.type.toUpperCase()}
+                      {isCurrentStep && <span className="ml-2 text-cyan-400">← текущий</span>}
                     </span>
                     <span className="text-xs text-slate-500">
                       #{idx + 1}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-400 truncate">
+                  <p className={`text-sm truncate ${isFutureStep ? 'text-slate-600' : 'text-slate-400'}`}>
                     {step.description}
                   </p>
-                  {step.measurementResult !== undefined && (
+                  {step.measurementResult !== undefined && isPastStep && (
                     <div className="mt-1 flex items-center gap-1 text-xs text-purple-400">
                       <Gauge className="w-3 h-3" />
                       Результат: {step.measurementResult}
@@ -105,8 +111,8 @@ export const EventLog: React.FC<EventLogProps> = ({
                 </div>
               </div>
             </motion.div>
-          ))}
-        </AnimatePresence>
+          );
+        })}
         
         {steps.length === 0 && (
           <div className="p-8 text-center text-slate-500">
@@ -121,4 +127,3 @@ export const EventLog: React.FC<EventLogProps> = ({
 };
 
 export default EventLog;
-

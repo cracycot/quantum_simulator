@@ -43,7 +43,7 @@ const App: React.FC = () => {
   const [codeType, setCodeType] = useState<CodeType>('repetition');
   const [initialState, setInitialState] = useState<LogicalState>('zero');
   const [noiseType, setNoiseType] = useState<NoiseType>('bit-flip');
-  const [noiseProbability, setNoiseProbability] = useState(0.1);
+  const [errorCount, setErrorCount] = useState(1);
   
   // Simulator state
   const [simulator, setSimulator] = useState<QECSimulator | null>(null);
@@ -61,14 +61,16 @@ const App: React.FC = () => {
   // Get number of qubits based on code type
   const numQubits = codeType === 'repetition' ? 3 : 9;
 
-  // Initialize simulator
+  // Initialize simulator - only when code type or initial state changes
   const initializeSimulator = useCallback(() => {
     const config: SimulatorConfig = {
       codeType,
       initialState,
       noiseConfig: {
         type: noiseType,
-        probability: noiseProbability
+        probability: 0,
+        mode: 'exact-count',
+        exactCount: errorCount
       }
     };
     
@@ -76,26 +78,44 @@ const App: React.FC = () => {
     sim.initialize();
     setSimulator(sim);
     setPhase(sim.getPhase());
-    setCurrentStep(0);
+    setCurrentStep(sim.getHistory().length);
     setIsPlaying(false);
-  }, [codeType, initialState, noiseType, noiseProbability]);
+  }, [codeType, initialState]); // Only reset on code/state change, not noise
 
-  // Initialize on mount and config change
+  // Initialize on mount and when code/state changes
   useEffect(() => {
     initializeSimulator();
   }, [initializeSimulator]);
 
-  // Auto-play effect
+  // Update noise config without resetting simulator
+  useEffect(() => {
+    if (simulator) {
+      // Update noise config - will be used on next noise application
+      simulator.getState().config.noiseConfig = {
+        type: noiseType,
+        probability: 0,
+        mode: 'exact-count',
+        exactCount: errorCount
+      };
+    }
+  }, [noiseType, errorCount, simulator]);
+
+  // Auto-play effect - executes simulation steps
   useEffect(() => {
     if (isPlaying && simulator) {
       playIntervalRef.current = setInterval(() => {
-        const success = simulator.stepForward();
-        if (!success) {
+        const simPhase = simulator.getPhase();
+        if (simPhase !== 'complete') {
+          // Execute next simulation step
+          simulator.stepForward();
+          setPhase(simulator.getPhase());
+          // Update view to show latest step
+          setCurrentStep(simulator.getHistory().length);
+        } else {
+          // Simulation complete, stop auto-play
           setIsPlaying(false);
         }
-        setPhase(simulator.getPhase());
-        setCurrentStep(prev => prev + 1);
-      }, 1000);
+      }, 600);
     }
 
     return () => {
@@ -107,26 +127,53 @@ const App: React.FC = () => {
 
   // Control handlers
   const handlePlay = () => {
-    if (phase === 'complete') {
-      initializeSimulator();
-    }
+    // Always create new simulation with current settings
+    const config: SimulatorConfig = {
+      codeType,
+      initialState,
+      noiseConfig: {
+        type: noiseType,
+        probability: 0,
+        mode: 'exact-count',
+        exactCount: errorCount
+      }
+    };
+    
+    const sim = new QECSimulator(config);
+    sim.initialize();
+    setSimulator(sim);
+    setPhase(sim.getPhase());
+    setCurrentStep(sim.getHistory().length);
     setIsPlaying(true);
   };
 
   const handlePause = () => setIsPlaying(false);
 
+  // Navigation handlers - move through snapshots and update simulator state
+  const [, forceUpdate] = useState(0);
+  
   const handleStepForward = () => {
-    if (simulator && phase !== 'complete') {
-      simulator.stepForward();
-      setPhase(simulator.getPhase());
-      setCurrentStep(prev => prev + 1);
+    if (simulator) {
+      const snapshotCount = simulator.getSnapshotCount();
+      const currentSnapshotIndex = simulator.getCurrentSnapshotIndex();
+      if (currentSnapshotIndex < snapshotCount - 1) {
+        simulator.goToStep(currentSnapshotIndex + 1);
+        setPhase(simulator.getPhase());
+        setCurrentStep(simulator.getHistory().length);
+        forceUpdate(n => n + 1); // Force re-render for Bloch spheres
+      }
     }
   };
 
   const handleStepBackward = () => {
-    if (simulator && simulator.stepBackward()) {
-      setPhase(simulator.getPhase());
-      setCurrentStep(prev => Math.max(0, prev - 1));
+    if (simulator) {
+      const currentSnapshotIndex = simulator.getCurrentSnapshotIndex();
+      if (currentSnapshotIndex > 0) {
+        simulator.goToStep(currentSnapshotIndex - 1);
+        setPhase(simulator.getPhase());
+        setCurrentStep(simulator.getHistory().length);
+        forceUpdate(n => n + 1); // Force re-render for Bloch spheres
+      }
     }
   };
 
@@ -138,13 +185,17 @@ const App: React.FC = () => {
     if (simulator) {
       simulator.injectError(qubit, errorType);
       setPhase(simulator.getPhase());
-      setCurrentStep(prev => prev + 1);
+      setCurrentStep(simulator.getHistory().length);
     }
   };
 
-  // Calculate fidelities
-  const calculateFidelities = () => {
-    if (!simulator) return { zero: 0, one: 0, plus: 0, minus: 0 };
+  // Get current snapshot index for reactivity
+  const snapshotIndex = simulator?.getCurrentSnapshotIndex() ?? 0;
+  
+  // Calculate fidelities - recalculate when simulation state changes
+  const fidelities = React.useMemo(() => {
+    // Force recalculation when phase or snapshot changes
+    if (!simulator || phase === 'init') return { zero: 0, one: 0, plus: 0, minus: 0 };
     
     try {
       const state = simulator.getState().system.state;
@@ -170,9 +221,7 @@ const App: React.FC = () => {
     } catch {
       return { zero: 0, one: 0, plus: 0, minus: 0 };
     }
-  };
-
-  const fidelities = calculateFidelities();
+  }, [simulator, phase, codeType, snapshotIndex]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -229,15 +278,16 @@ const App: React.FC = () => {
               onInitialStateChange={setInitialState}
               noiseType={noiseType}
               onNoiseTypeChange={setNoiseType}
-              noiseProbability={noiseProbability}
-              onNoiseProbabilityChange={setNoiseProbability}
+              errorCount={errorCount}
+              onErrorCountChange={setErrorCount}
               phase={phase}
               onPlay={handlePlay}
               onPause={handlePause}
               onStepForward={handleStepForward}
               onStepBackward={handleStepBackward}
               onReset={handleReset}
-              onInjectError={handleInjectError}
+              currentStep={simulator?.getCurrentSnapshotIndex() ?? 0}
+              totalSteps={simulator?.getSnapshotCount() ?? 0}
               numQubits={numQubits}
               isPlaying={isPlaying}
             />
@@ -361,12 +411,20 @@ const App: React.FC = () => {
             <SyndromeTable
               codeType={codeType}
               currentSyndrome={simulator?.getState().syndrome}
+              errorsApplied={simulator?.getState().noiseEvents.filter(e => e.applied).length ?? 0}
+              noiseType={noiseType}
             />
 
             {/* QBER Indicator */}
             <QBERIndicator
-              physicalError={noiseType !== 'none' ? noiseProbability : 0}
-              logicalError={1 - Math.max(fidelities.zero, fidelities.one)}
+              physicalError={errorCount / numQubits}
+              logicalError={(() => {
+                // Calculate from actual fidelity with target state
+                const targetFidelity = initialState === 'zero' ? fidelities.zero : 
+                                       initialState === 'one' ? fidelities.one :
+                                       initialState === 'plus' ? fidelities.plus : fidelities.minus;
+                return 1 - targetFidelity;
+              })()}
             />
           </div>
         </div>
@@ -391,7 +449,7 @@ const App: React.FC = () => {
                 exit={{ height: 0, opacity: 0 }}
               >
                 <QBERChart
-                  codeType={codeType === 'repetition' ? 'repetition' : 'shor'}
+                  codeType="both"
                   showTheoreticalCurves
                 />
               </motion.div>
@@ -438,7 +496,6 @@ const App: React.FC = () => {
               <li>• <strong>Одиночная X-ошибка:</strong> 3-кубитный код исправит с вероятностью ~100%</li>
               <li>• <strong>Две X-ошибки:</strong> код не справится (демонстрация пределов)</li>
               <li>• <strong>Z-ошибка:</strong> 3-кубитный код не исправляет, код Шора — да</li>
-              <li>• <strong>Depolarizing шум:</strong> сравните устойчивость кодов при p = 5-15%</li>
             </ul>
           </div>
         </section>

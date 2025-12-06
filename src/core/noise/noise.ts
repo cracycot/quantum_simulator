@@ -4,10 +4,13 @@
 import { QuantumSystem } from '../quantum/system';
 
 export type NoiseType = 'bit-flip' | 'phase-flip' | 'bit-phase-flip' | 'depolarizing' | 'none';
+export type NoiseMode = 'probability' | 'exact-count';
 
 export interface NoiseConfig {
   type: NoiseType;
-  probability: number; // Probability of error per qubit
+  probability: number; // Probability of error per qubit (for 'probability' mode)
+  mode?: NoiseMode; // 'probability' (default) or 'exact-count'
+  exactCount?: number; // Exact number of errors to apply (for 'exact-count' mode)
   targetQubits?: number[]; // Specific qubits to apply noise (undefined = all)
 }
 
@@ -84,37 +87,76 @@ export function applyDepolarizing(system: QuantumSystem, qubitIndex: number, pro
 export function applyNoise(system: QuantumSystem, config: NoiseConfig): NoiseEvent[] {
   const events: NoiseEvent[] = [];
   const qubits = config.targetQubits ?? Array.from({ length: system.numQubits }, (_, i) => i);
+  const mode = config.mode ?? 'probability';
   
-  for (const qubitIndex of qubits) {
-    let errorType: NoiseEvent['errorType'] = 'none';
-    let applied = false;
+  if (config.type === 'none') {
+    // No noise - return empty events
+    return qubits.map(q => ({ qubitIndex: q, errorType: 'none' as const, applied: false }));
+  }
+  
+  if (mode === 'exact-count' && config.exactCount !== undefined) {
+    // Exact count mode: apply errors to exactly N random qubits
+    const count = Math.min(config.exactCount, qubits.length);
+    const shuffled = [...qubits].sort(() => Math.random() - 0.5);
+    const selectedQubits = new Set(shuffled.slice(0, count));
     
-    switch (config.type) {
-      case 'bit-flip':
-        applied = applyBitFlip(system, qubitIndex, config.probability);
-        errorType = applied ? 'X' : 'none';
-        break;
+    for (const qubitIndex of qubits) {
+      if (selectedQubits.has(qubitIndex)) {
+        // Apply error to this qubit (probability = 1)
+        let errorType: NoiseEvent['errorType'] = 'none';
         
-      case 'phase-flip':
-        applied = applyPhaseFlip(system, qubitIndex, config.probability);
-        errorType = applied ? 'Z' : 'none';
-        break;
-        
-      case 'bit-phase-flip':
-        applied = applyBitPhaseFlip(system, qubitIndex, config.probability);
-        errorType = applied ? 'Y' : 'none';
-        break;
-        
-      case 'depolarizing':
-        errorType = applyDepolarizing(system, qubitIndex, config.probability);
-        applied = errorType !== 'none';
-        break;
-        
-      case 'none':
-        break;
+        switch (config.type) {
+          case 'bit-flip':
+            applyBitFlip(system, qubitIndex, 1);
+            errorType = 'X';
+            break;
+          case 'phase-flip':
+            applyPhaseFlip(system, qubitIndex, 1);
+            errorType = 'Z';
+            break;
+          case 'bit-phase-flip':
+            applyBitPhaseFlip(system, qubitIndex, 1);
+            errorType = 'Y';
+            break;
+          case 'depolarizing':
+            errorType = applyDepolarizing(system, qubitIndex, 1);
+            break;
+        }
+        events.push({ qubitIndex, errorType, applied: true });
+      } else {
+        events.push({ qubitIndex, errorType: 'none', applied: false });
+      }
     }
-    
-    events.push({ qubitIndex, errorType, applied });
+  } else {
+    // Probability mode: each qubit independently has probability p of error
+    for (const qubitIndex of qubits) {
+      let errorType: NoiseEvent['errorType'] = 'none';
+      let applied = false;
+      
+      switch (config.type) {
+        case 'bit-flip':
+          applied = applyBitFlip(system, qubitIndex, config.probability);
+          errorType = applied ? 'X' : 'none';
+          break;
+          
+        case 'phase-flip':
+          applied = applyPhaseFlip(system, qubitIndex, config.probability);
+          errorType = applied ? 'Z' : 'none';
+          break;
+          
+        case 'bit-phase-flip':
+          applied = applyBitPhaseFlip(system, qubitIndex, config.probability);
+          errorType = applied ? 'Y' : 'none';
+          break;
+          
+        case 'depolarizing':
+          errorType = applyDepolarizing(system, qubitIndex, config.probability);
+          applied = errorType !== 'none';
+          break;
+      }
+      
+      events.push({ qubitIndex, errorType, applied });
+    }
   }
   
   return events;
@@ -160,16 +202,14 @@ export function repetitionLogicalErrorRate(physicalErrorRate: number): number {
 
 /**
  * Calculate theoretical logical error rate for Shor code (simplified)
- * Accounts for combinations of errors that lead to logical errors
+ * Shor code protects against X, Y, and Z errors simultaneously
+ * Better than repetition code at low error rates
  */
 export function shorLogicalErrorRate(physicalErrorRate: number): number {
   const p = physicalErrorRate;
-  // Simplified: assumes independent X and Z channels
-  // In reality, it's more complex due to correlated errors
-  const pBit = 3 * p * p; // Bit-flip logical error (same as repetition)
-  const pPhase = 3 * p * p; // Phase-flip logical error
-  // Combined (using inclusion-exclusion)
-  return pBit + pPhase - pBit * pPhase;
+  // Shor code: ~p² improvement (better than repetition's 3p²)
+  // Simplified approximation for visualization
+  return p * p * (1 + 2 * p);
 }
 
 /**

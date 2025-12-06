@@ -8,8 +8,6 @@ import {
   Pause, 
   SkipBack, 
   SkipForward, 
-  RotateCcw,
-  Zap,
   Shield,
   AlertTriangle
 } from 'lucide-react';
@@ -28,8 +26,8 @@ interface ControlPanelProps {
   // Noise settings
   noiseType: NoiseType;
   onNoiseTypeChange: (type: NoiseType) => void;
-  noiseProbability: number;
-  onNoiseProbabilityChange: (p: number) => void;
+  errorCount: number;
+  onErrorCountChange: (count: number) => void;
   
   // Playback controls
   phase: SimulationPhase;
@@ -39,10 +37,11 @@ interface ControlPanelProps {
   onStepBackward: () => void;
   onReset: () => void;
   
-  // Manual error injection
-  onInjectError: (qubit: number, type: 'X' | 'Y' | 'Z') => void;
-  numQubits: number;
+  // Navigation state
+  currentStep: number;
+  totalSteps: number;
   
+  numQubits: number;
   isPlaying: boolean;
 }
 
@@ -73,18 +72,21 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onInitialStateChange,
   noiseType,
   onNoiseTypeChange,
-  noiseProbability,
-  onNoiseProbabilityChange,
+  errorCount,
+  onErrorCountChange,
   phase,
   onPlay,
   onPause,
   onStepForward,
   onStepBackward,
   onReset,
-  onInjectError,
+  currentStep,
+  totalSteps,
   numQubits,
   isPlaying
 }) => {
+  const canGoBack = currentStep > 0;
+  const canGoForward = currentStep < totalSteps;
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 space-y-6">
       {/* Header */}
@@ -101,6 +103,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         >
           {phaseLabels[phase]}
         </motion.div>
+        {phase === 'complete' && (
+          <p className="text-xs text-slate-500 mt-1">
+            Нажмите ↺ для перезапуска симуляции
+          </p>
+        )}
       </div>
 
       {/* Code Selection */}
@@ -164,9 +171,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         
         <div className="grid grid-cols-2 gap-2">
           {[
-            { type: 'none' as NoiseType, label: 'Нет' },
             { type: 'bit-flip' as NoiseType, label: 'X (Bit-flip)' },
             { type: 'phase-flip' as NoiseType, label: 'Z (Phase-flip)' },
+            { type: 'bit-phase-flip' as NoiseType, label: 'Y (Combined)' },
             { type: 'depolarizing' as NoiseType, label: 'Depolarizing' }
           ].map(({ type, label }) => (
             <button
@@ -183,74 +190,46 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           ))}
         </div>
 
-        {noiseType !== 'none' && (
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Вероятность</span>
-              <span className="text-amber-400 font-mono">
-                {(noiseProbability * 100).toFixed(1)}%
-              </span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="0.5"
-              step="0.01"
-              value={noiseProbability}
-              onChange={(e) => onNoiseProbabilityChange(parseFloat(e.target.value))}
-              className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
-            />
+        {/* Error count selector */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-400">Количество ошибок</span>
+            <span className="text-amber-400 font-mono">{errorCount}</span>
           </div>
-        )}
-      </div>
-
-      {/* Manual Error Injection */}
-      <div className="space-y-2">
-        <label className="text-sm text-slate-400 font-medium flex items-center gap-2">
-          <Zap className="w-4 h-4" />
-          Ручное внесение ошибок
-        </label>
-        <div className="grid grid-cols-3 gap-1">
-          {Array.from({ length: numQubits }, (_, i) => (
-            <div key={i} className="flex gap-1">
-              <span className="text-xs text-slate-500 w-6">q{i}</span>
-              {(['X', 'Y', 'Z'] as const).map((errorType) => (
-                <button
-                  key={errorType}
-                  onClick={() => onInjectError(i, errorType)}
-                  disabled={phase === 'init' || phase === 'complete'}
-                  className={`px-2 py-1 text-xs rounded transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
-                    errorType === 'X' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/40' :
-                    errorType === 'Y' ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/40' :
-                    'bg-blue-500/20 text-blue-400 hover:bg-blue-500/40'
-                  }`}
-                >
-                  {errorType}
-                </button>
-              ))}
-            </div>
-          ))}
+          <div className="flex gap-2">
+            {[0, 1, 2].map((i) => (
+              <button
+                key={i}
+                onClick={() => onErrorCountChange(i)}
+                className={`flex-1 py-2 rounded-lg font-mono text-sm transition-all ${
+                  errorCount === i
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                }`}
+              >
+                {i}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">
+            {errorCount === 0 
+              ? 'Без ошибок' 
+              : errorCount === 1
+                ? '1 ошибка — код исправит'
+                : '2 ошибки — код НЕ исправит'}
+          </p>
         </div>
       </div>
 
       {/* Playback Controls */}
       <div className="flex items-center justify-center gap-2 pt-4 border-t border-slate-700">
         <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={onReset}
-          className="p-3 rounded-full bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
-          title="Сброс"
-        >
-          <RotateCcw className="w-5 h-5" />
-        </motion.button>
-        
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={canGoBack ? { scale: 1.1 } : {}}
+          whileTap={canGoBack ? { scale: 0.95 } : {}}
           onClick={onStepBackward}
-          className="p-3 rounded-full bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
-          title="Шаг назад"
+          disabled={!canGoBack}
+          className="p-3 rounded-full bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Шаг назад (просмотр)"
         >
           <SkipBack className="w-5 h-5" />
         </motion.button>
@@ -259,22 +238,34 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
           onClick={isPlaying ? onPause : onPlay}
-          className="p-4 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/50 transition-shadow"
-          title={isPlaying ? 'Пауза' : 'Запуск'}
+          className="p-4 rounded-full text-white shadow-lg transition-shadow bg-gradient-to-r from-cyan-500 to-blue-500 shadow-cyan-500/25 hover:shadow-cyan-500/50"
+          title={isPlaying ? 'Пауза' : 'Запустить моделирование'}
         >
-          {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
+          {isPlaying ? (
+            <Pause className="w-6 h-6" />
+          ) : (
+            <Play className="w-6 h-6 ml-0.5" />
+          )}
         </motion.button>
         
         <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={canGoForward ? { scale: 1.1 } : {}}
+          whileTap={canGoForward ? { scale: 0.95 } : {}}
           onClick={onStepForward}
-          className="p-3 rounded-full bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
-          title="Шаг вперёд"
+          disabled={!canGoForward}
+          className="p-3 rounded-full bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Шаг вперёд (просмотр)"
         >
           <SkipForward className="w-5 h-5" />
         </motion.button>
       </div>
+      
+      {/* Step indicator */}
+      {totalSteps > 0 && (
+        <div className="text-center text-xs text-slate-500">
+          Шаг {currentStep} из {totalSteps}
+        </div>
+      )}
     </div>
   );
 };

@@ -186,7 +186,8 @@ export function getLogicalZeroState(): StateVector {
 
 export function getLogicalOneState(): StateVector {
   const sv = new StateVector(3);
-  sv.amplitudes[0b111] = Complex.one();
+  sv.amplitudes[0b000] = Complex.zero(); // Clear default |000⟩
+  sv.amplitudes[0b111] = Complex.one();  // Set |111⟩
   return sv;
 }
 
