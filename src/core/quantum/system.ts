@@ -2,7 +2,8 @@
  * Quantum system with multi-qubit state management
  */
 import { Complex, StateVector } from './complex';
-import { GateOperation, applyGate, GateName } from './gates';
+import { GateOperation, applyGate as applyGateInternal } from './gates';
+import type { GateErrorConfig } from '../noise/gateErrors';
 
 export interface QubitInfo {
   index: number;
@@ -11,7 +12,7 @@ export interface QubitInfo {
 }
 
 export interface QuantumStep {
-  type: 'gate' | 'measurement' | 'noise' | 'encode' | 'decode' | 'correction';
+  type: 'gate' | 'measurement' | 'noise' | 'encode' | 'decode' | 'correction' | 'gate-error';
   operation?: GateOperation;
   description: string;
   stateBefore: StateVector;
@@ -35,12 +36,14 @@ export class QuantumSystem {
   public qubits: QubitInfo[];
   public history: QuantumStep[];
   private stepCounter: number;
+  private gateErrorConfig?: GateErrorConfig;
 
-  constructor(numQubits: number) {
+  constructor(numQubits: number, gateErrorConfig?: GateErrorConfig) {
     this.state = new StateVector(numQubits);
     this.qubits = [];
     this.history = [];
     this.stepCounter = 0;
+    this.gateErrorConfig = gateErrorConfig;
     
     for (let i = 0; i < numQubits; i++) {
       this.qubits.push({
@@ -110,11 +113,77 @@ export class QuantumSystem {
   }
 
   /**
+   * Update gate error configuration
+   */
+  setGateErrorConfig(config?: GateErrorConfig): void {
+    this.gateErrorConfig = config;
+  }
+
+  private shouldApplyGateError(qubitCount: number): boolean {
+    if (!this.gateErrorConfig?.enabled || !this.gateErrorConfig.probability) return false;
+    const scope = this.gateErrorConfig.applyTo ?? 'all';
+    if (scope === 'all') return true;
+    if (scope === 'single-qubit' && qubitCount === 1) return true;
+    if (scope === 'two-qubit' && qubitCount >= 2) return true;
+    return false;
+  }
+
+  private pickGateError(qubitIndex: number): GateOperation | null {
+    const cfg = this.gateErrorConfig;
+    if (!cfg || !cfg.enabled || cfg.probability <= 0) return null;
+    if (Math.random() >= cfg.probability) return null;
+
+    const type = cfg.type;
+    if (type === 'none') return null;
+
+    const pickDepolarizing = (): GateOperation => {
+      const r = Math.random();
+      if (r < 1 / 3) return { name: 'X', qubits: [qubitIndex], label: `X${qubitIndex} (gate error)` };
+      if (r < 2 / 3) return { name: 'Y', qubits: [qubitIndex], label: `Y${qubitIndex} (gate error)` };
+      return { name: 'Z', qubits: [qubitIndex], label: `Z${qubitIndex} (gate error)` };
+    };
+
+    switch (type) {
+      case 'bit-flip':
+        return { name: 'X', qubits: [qubitIndex], label: `X${qubitIndex} (gate error)` };
+      case 'phase-flip':
+        return { name: 'Z', qubits: [qubitIndex], label: `Z${qubitIndex} (gate error)` };
+      case 'bit-phase-flip':
+        return { name: 'Y', qubits: [qubitIndex], label: `Y${qubitIndex} (gate error)` };
+      case 'depolarizing':
+        return pickDepolarizing();
+      default:
+        return null;
+    }
+  }
+
+  private applyGateErrorIfNeeded(qubits: number[]): void {
+    if (!this.shouldApplyGateError(qubits.length)) return;
+
+    for (const q of qubits) {
+      const errorOp = this.pickGateError(q);
+      if (!errorOp) continue;
+
+      const stateBefore = this.state.clone();
+      applyGateInternal(this.state, errorOp);
+
+      this.history.push({
+        type: 'gate-error',
+        operation: errorOp,
+        description: `Gate error ${errorOp.name} on ${this.qubits[q]?.label || `q${q}`} (p=${((this.gateErrorConfig?.probability ?? 0) * 100).toFixed(2)}%)`,
+        stateBefore,
+        stateAfter: this.state.clone(),
+        timestamp: this.stepCounter++
+      });
+    }
+  }
+
+  /**
    * Apply a quantum gate
    */
   applyGate(op: GateOperation): void {
     const stateBefore = this.state.clone();
-    applyGate(this.state, op);
+    applyGateInternal(this.state, op);
     
     const qubitsStr = op.qubits.map(q => this.qubits[q]?.label || `q${q}`).join(', ');
     const description = `Apply ${op.label || op.name} to ${qubitsStr}`;
@@ -127,6 +196,8 @@ export class QuantumSystem {
       stateAfter: this.state.clone(),
       timestamp: this.stepCounter++
     });
+
+    this.applyGateErrorIfNeeded(op.qubits);
   }
 
   /**
@@ -219,7 +290,7 @@ export class QuantumSystem {
    * Clone the system
    */
   clone(): QuantumSystem {
-    const newSystem = new QuantumSystem(this.numQubits);
+    const newSystem = new QuantumSystem(this.numQubits, this.gateErrorConfig);
     newSystem.state = this.state.clone();
     newSystem.qubits = this.qubits.map(q => ({ ...q }));
     newSystem.history = this.history.map(h => ({
@@ -246,8 +317,8 @@ export class QuantumSystem {
 /**
  * Create a quantum system for 3-qubit repetition code
  */
-export function create3QubitSystem(): QuantumSystem {
-  const system = new QuantumSystem(3);
+export function create3QubitSystem(gateErrorConfig?: GateErrorConfig): QuantumSystem {
+  const system = new QuantumSystem(3, gateErrorConfig);
   system.setQubitInfo(0, 'q₀', 'data');
   system.setQubitInfo(1, 'q₁', 'data');
   system.setQubitInfo(2, 'q₂', 'data');
@@ -257,8 +328,8 @@ export function create3QubitSystem(): QuantumSystem {
 /**
  * Create a quantum system for 9-qubit Shor code
  */
-export function create9QubitShorSystem(): QuantumSystem {
-  const system = new QuantumSystem(9);
+export function create9QubitShorSystem(gateErrorConfig?: GateErrorConfig): QuantumSystem {
+  const system = new QuantumSystem(9, gateErrorConfig);
   for (let i = 0; i < 9; i++) {
     system.setQubitInfo(i, `q${i}`, 'data');
   }

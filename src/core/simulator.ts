@@ -25,6 +25,8 @@ import {
 } from './codes/shor';
 import { applyNoise, injectError } from './noise/noise';
 import type { NoiseConfig, NoiseEvent } from './noise/noise';
+import type { GateErrorConfig } from './noise/gateErrors';
+import type { CustomGateStep } from '../types/gatePlan';
 
 export type CodeType = 'repetition' | 'shor';
 export type LogicalState = 'zero' | 'one' | 'plus' | 'minus';
@@ -33,6 +35,7 @@ export interface SimulatorConfig {
   codeType: CodeType;
   initialState: LogicalState;
   noiseConfig: NoiseConfig;
+  gateErrorConfig?: GateErrorConfig;
 }
 
 export interface SimulationResult {
@@ -79,8 +82,8 @@ export class QECSimulator {
 
   private createInitialState(config: SimulatorConfig): SimulatorState {
     const system = config.codeType === 'repetition' 
-      ? create3QubitSystem() 
-      : create9QubitShorSystem();
+      ? create3QubitSystem(config.gateErrorConfig) 
+      : create9QubitShorSystem(config.gateErrorConfig);
     
     return {
       system,
@@ -267,6 +270,37 @@ export class QECSimulator {
     this.state.phase = 'correction';
     this.saveSnapshot();
     return correctedQubits;
+  }
+
+  /**
+   * Apply a single custom gate with optional gate-error override
+   */
+  applyCustomGate(step: CustomGateStep): void {
+    const { system, config } = this.state;
+    const originalCfg = config.gateErrorConfig;
+    if (step.errorProbability > 0) {
+      system.setGateErrorConfig({
+        enabled: true,
+        type: step.errorType,
+        probability: step.errorProbability,
+        applyTo: step.applyTo ?? 'all'
+      });
+    }
+    system.applyGate(step.op);
+    // restore gate error config
+    system.setGateErrorConfig(originalCfg);
+
+    this.state.phase = 'correction';
+    this.saveSnapshot();
+  }
+
+  /**
+   * Apply a full custom circuit (sequence of gates)
+   */
+  applyCustomCircuit(plan: CustomGateStep[]): void {
+    for (const step of plan) {
+      this.applyCustomGate(step);
+    }
   }
 
   /**

@@ -23,6 +23,7 @@ const stepIcons: Record<QuantumStep['type'], React.ReactNode> = {
   gate: <Cpu className="w-4 h-4" />,
   measurement: <Gauge className="w-4 h-4" />,
   noise: <AlertTriangle className="w-4 h-4" />,
+  'gate-error': <AlertTriangle className="w-4 h-4" />,
   encode: <Activity className="w-4 h-4" />,
   decode: <Activity className="w-4 h-4" />,
   correction: <CheckCircle className="w-4 h-4" />
@@ -32,6 +33,7 @@ const stepColors: Record<QuantumStep['type'], string> = {
   gate: 'text-blue-400 bg-blue-500/10',
   measurement: 'text-purple-400 bg-purple-500/10',
   noise: 'text-red-400 bg-red-500/10',
+  'gate-error': 'text-red-300 bg-red-500/10',
   encode: 'text-green-400 bg-green-500/10',
   decode: 'text-cyan-400 bg-cyan-500/10',
   correction: 'text-emerald-400 bg-emerald-500/10'

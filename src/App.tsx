@@ -17,6 +17,8 @@ import {
 import { QECSimulator } from './core/simulator';
 import type { CodeType, LogicalState, SimulationPhase, SimulatorConfig } from './core/simulator';
 import type { NoiseType } from './core/noise/noise';
+import type { GateErrorConfig, GateErrorType } from './core/noise/gateErrors';
+import { defaultGateErrorConfig } from './core/noise/gateErrors';
 import { 
   getLogicalZeroState, 
   getLogicalOneState, 
@@ -27,6 +29,8 @@ import {
   getShorLogicalZeroState,
   getShorLogicalOneState
 } from './core/codes/shor';
+import type { CustomGateStep } from './types/gatePlan';
+import type { GateOperation } from './core/quantum/gates';
 
 import { BlochSphere, BlochSphereGrid } from './components/BlochSphere';
 import { QuantumCircuit, CircuitLegend } from './components/QuantumCircuit';
@@ -44,6 +48,11 @@ const App: React.FC = () => {
   const [initialState, setInitialState] = useState<LogicalState>('zero');
   const [noiseType, setNoiseType] = useState<NoiseType>('bit-flip');
   const [errorCount, setErrorCount] = useState(1);
+  const [gateErrorConfig, setGateErrorConfig] = useState<GateErrorConfig>(defaultGateErrorConfig);
+  const [customGatePlan, setCustomGatePlan] = useState<CustomGateStep[]>([]);
+  const [pendingTwoQubitGate, setPendingTwoQubitGate] = useState<{ gateName: string; firstQubit: number } | null>(null);
+  const [selectedGateForErrorConfig, setSelectedGateForErrorConfig] = useState<number | null>(null);
+  const [activeConfigTab, setActiveConfigTab] = useState<'noise' | 'gate-error'>('noise');
   
   // Simulator state
   const [simulator, setSimulator] = useState<QECSimulator | null>(null);
@@ -71,7 +80,8 @@ const App: React.FC = () => {
         probability: 0,
         mode: 'exact-count',
         exactCount: errorCount
-      }
+      },
+      gateErrorConfig
     };
     
     const sim = new QECSimulator(config);
@@ -97,8 +107,10 @@ const App: React.FC = () => {
         mode: 'exact-count',
         exactCount: errorCount
       };
+      simulator.getState().config.gateErrorConfig = gateErrorConfig;
+      simulator.getState().system.setGateErrorConfig(gateErrorConfig);
     }
-  }, [noiseType, errorCount, simulator]);
+  }, [noiseType, errorCount, gateErrorConfig, simulator]);
 
   // Auto-play effect - executes simulation steps
   useEffect(() => {
@@ -136,7 +148,8 @@ const App: React.FC = () => {
         probability: 0,
         mode: 'exact-count',
         exactCount: errorCount
-      }
+      },
+      gateErrorConfig
     };
     
     const sim = new QECSimulator(config);
@@ -179,6 +192,92 @@ const App: React.FC = () => {
 
   const handleReset = () => {
     initializeSimulator();
+  };
+
+  const handleAddCustomGate = (step: CustomGateStep) => {
+    setCustomGatePlan((prev) => [...prev, step]);
+  };
+
+  const handleRemoveCustomGate = (index: number) => {
+    setCustomGatePlan((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleClearCustomPlan = () => setCustomGatePlan([]);
+
+  const handleRunCustomPlan = () => {
+    const config: SimulatorConfig = {
+      codeType,
+      initialState,
+      noiseConfig: {
+        type: noiseType,
+        probability: 0,
+        mode: 'exact-count',
+        exactCount: errorCount
+      },
+      gateErrorConfig
+    };
+    const sim = new QECSimulator(config);
+    sim.initialize();
+    sim.encode();
+    sim.applyCustomCircuit(customGatePlan);
+    setSimulator(sim);
+    setPhase(sim.getPhase());
+    setCurrentStep(sim.getHistory().length);
+    setIsPlaying(false);
+  };
+
+  const handleGateDrop = (gateName: string, qubitIndex: number, isTwoQubit: boolean) => {
+    if (isTwoQubit) {
+      if (pendingTwoQubitGate && pendingTwoQubitGate.gateName === gateName) {
+        // Second qubit selected - add gate
+        const op: GateOperation = {
+          name: gateName as GateOperation['name'],
+          qubits: gateName === 'CNOT' || gateName === 'CZ' 
+            ? [pendingTwoQubitGate.firstQubit, qubitIndex]
+            : [pendingTwoQubitGate.firstQubit, qubitIndex]
+        };
+        handleAddCustomGate({
+          op,
+          errorProbability: gateErrorConfig.probability,
+          errorType: gateErrorConfig.type,
+          applyTo: gateErrorConfig.applyTo
+        });
+        setPendingTwoQubitGate(null);
+      } else {
+        // First qubit selected - wait for second
+        setPendingTwoQubitGate({ gateName, firstQubit: qubitIndex });
+      }
+    } else {
+      // Single-qubit gate - add immediately
+      const op: GateOperation = {
+        name: gateName as GateOperation['name'],
+        qubits: [qubitIndex]
+      };
+      handleAddCustomGate({
+        op,
+        errorProbability: gateErrorConfig.probability,
+        errorType: gateErrorConfig.type,
+        applyTo: gateErrorConfig.applyTo
+      });
+    }
+  };
+
+  const handleCustomGateClick = (index: number) => {
+    setSelectedGateForErrorConfig(index);
+  };
+
+  const handleUpdateGateError = (index: number, errorProbability: number, errorType: GateErrorType) => {
+    setCustomGatePlan((prev) => {
+      const updated = [...prev];
+      if (updated[index]) {
+        updated[index] = {
+          ...updated[index],
+          errorProbability,
+          errorType
+        };
+      }
+      return updated;
+    });
   };
 
   const handleInjectError = (qubit: number, errorType: 'X' | 'Y' | 'Z') => {
@@ -280,6 +379,17 @@ const App: React.FC = () => {
               onNoiseTypeChange={setNoiseType}
               errorCount={errorCount}
               onErrorCountChange={setErrorCount}
+              gateErrorConfig={gateErrorConfig}
+              onGateErrorConfigChange={setGateErrorConfig}
+              customGatePlan={customGatePlan}
+              onAddCustomGate={handleAddCustomGate}
+              onRemoveCustomGate={handleRemoveCustomGate}
+              onClearCustomGatePlan={handleClearCustomPlan}
+              onRunCustomGatePlan={handleRunCustomPlan}
+              activeConfigTab={activeConfigTab}
+              onActiveConfigTabChange={setActiveConfigTab}
+              pendingTwoQubitGate={pendingTwoQubitGate}
+              onPendingTwoQubitGateChange={setPendingTwoQubitGate}
               phase={phase}
               onPlay={handlePlay}
               onPause={handlePause}
@@ -319,6 +429,11 @@ const App: React.FC = () => {
                   steps={simulator.getHistory()}
                   currentStep={currentStep}
                   qubitLabels={Array.from({ length: numQubits }, (_, i) => `q${i}`)}
+                  isDroppable={activeConfigTab === 'gate-error'}
+                  onGateDrop={handleGateDrop}
+                  pendingTwoQubitGate={pendingTwoQubitGate}
+                  customGatePlan={customGatePlan}
+                  onCustomGateClick={handleCustomGateClick}
                 />
               )}
             </div>
@@ -500,6 +615,89 @@ const App: React.FC = () => {
           </div>
         </section>
       </main>
+
+      {/* Modal for gate error configuration */}
+      <AnimatePresence>
+        {selectedGateForErrorConfig !== null && customGatePlan[selectedGateForErrorConfig] && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedGateForErrorConfig(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-slate-700"
+            >
+            <h3 className="text-lg font-semibold text-white mb-4">
+              Настройка ошибок для {customGatePlan[selectedGateForErrorConfig].op.name}
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-sm text-slate-400 mb-2">
+                  <span>Вероятность ошибки</span>
+                  <span className="text-slate-200 font-semibold">
+                    {(customGatePlan[selectedGateForErrorConfig].errorProbability * 100).toFixed(1)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={20}
+                  step={0.5}
+                  value={customGatePlan[selectedGateForErrorConfig].errorProbability * 100}
+                  onChange={(e) => {
+                    const newProb = parseFloat(e.target.value) / 100;
+                    const currentGate = customGatePlan[selectedGateForErrorConfig];
+                    if (currentGate) {
+                      handleUpdateGateError(selectedGateForErrorConfig, newProb, currentGate.errorType as GateErrorType);
+                    }
+                  }}
+                  className="w-full accent-cyan-500"
+                />
+                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                  <span>0%</span>
+                  <span>20%</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-slate-400 mb-2">Тип ошибки</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { type: 'bit-flip' as GateErrorType, label: 'X (bit-flip)' },
+                    { type: 'phase-flip' as GateErrorType, label: 'Z (phase-flip)' },
+                    { type: 'bit-phase-flip' as GateErrorType, label: 'Y (combined)' },
+                    { type: 'depolarizing' as GateErrorType, label: 'Depolarizing' }
+                  ].map(({ type, label }) => (
+                    <button
+                      key={type}
+                      onClick={() => handleUpdateGateError(
+                        selectedGateForErrorConfig,
+                        customGatePlan[selectedGateForErrorConfig].errorProbability,
+                        type
+                      )}
+                      className={`px-3 py-2 rounded-lg text-sm transition-all ${
+                        customGatePlan[selectedGateForErrorConfig].errorType === type
+                          ? 'bg-cyan-500/30 text-cyan-200 ring-1 ring-cyan-500'
+                          : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setSelectedGateForErrorConfig(null)}
+                  className="flex-1 px-4 py-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
+          </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Footer */}
       <footer className="border-t border-slate-800 mt-12 py-6">
