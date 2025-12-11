@@ -13,9 +13,8 @@ import {
 } from 'lucide-react';
 import type { CodeType, LogicalState, SimulationPhase } from '../core/simulator';
 import type { NoiseType } from '../core/noise/noise';
-import type { GateErrorConfig, GateErrorType, GateErrorScope } from '../core/noise/gateErrors';
+import type { GateErrorConfig, GateErrorType } from '../core/noise/gateErrors';
 import type { CustomGateStep } from '../types/gatePlan';
-import type { GateOperation } from '../core/quantum/gates';
 
 interface ControlPanelProps {
   // Code selection
@@ -117,7 +116,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
   const perGateErrorProb = gateErrorConfig.probability * 100; // percent
   const perGateErrorType = gateErrorConfig.type;
-  const perGateScope = gateErrorConfig.applyTo ?? 'all';
+  
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 space-y-6">
       {/* Header */}
@@ -195,32 +194,29 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
       {/* Noise / Gate error settings */}
       <div className="space-y-4 p-4 bg-slate-900/50 rounded-xl">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2">
           <div className="flex gap-2">
             <button
-              className={`px-3 py-1 text-sm rounded-lg transition-all ${activeConfigTab === 'noise' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`}
-              onClick={() => onActiveConfigTabChange('noise')}
+              type="button"
+              className={`px-3 py-1.5 text-sm rounded-lg transition-all cursor-pointer ${activeConfigTab === 'noise' ? 'bg-amber-500/30 text-amber-200 ring-1 ring-amber-500' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+              onClick={() => {
+                console.log('Tab: noise');
+                onActiveConfigTabChange('noise');
+              }}
             >
-              Шум
+              🔊 Шум
             </button>
             <button
-              className={`px-3 py-1 text-sm rounded-lg transition-all ${activeConfigTab === 'gate-error' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`}
-              onClick={() => onActiveConfigTabChange('gate-error')}
+              type="button"
+              className={`px-3 py-1.5 text-sm rounded-lg transition-all cursor-pointer ${activeConfigTab === 'gate-error' ? 'bg-cyan-500/30 text-cyan-200 ring-1 ring-cyan-500' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+              onClick={() => {
+                console.log('Tab: gate-error');
+                onActiveConfigTabChange('gate-error');
+              }}
             >
-              Gate Errors
+              ⚡ Ошибки гейтов
             </button>
           </div>
-          {activeConfigTab === 'noise' ? (
-            <div className="flex items-center gap-2 text-amber-400">
-              <AlertTriangle className="w-4 h-4" />
-              <span className="text-sm font-medium">Модель шума</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-cyan-400">
-              <Shield className="w-4 h-4" />
-              <span className="text-sm font-medium">Ошибки гейтов</span>
-            </div>
-          )}
         </div>
 
         {activeConfigTab === 'noise' ? (
@@ -282,25 +278,43 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             <div className="space-y-3">
               <div className="text-sm text-slate-300 font-medium">Палитра гейтов</div>
               <p className="text-xs text-slate-500">Перетащите гейт на схему справа</p>
-              <div className="grid grid-cols-6 gap-2">
-                {['H','X','Y','Z','Rx','Ry','Rz','S','T','CNOT','CZ','SWAP'].map((g) => {
-                  const isTwoQubitGate = ['CNOT', 'CZ', 'SWAP'].includes(g);
-                  return (
-                    <div
-                      key={g}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('gateName', g);
-                        e.dataTransfer.setData('isTwoQubit', isTwoQubitGate.toString());
-                        e.dataTransfer.effectAllowed = 'copy';
-                      }}
-                      className="px-3 py-2 rounded-lg text-sm font-mono transition-all cursor-grab active:cursor-grabbing bg-slate-800 text-slate-300 hover:bg-slate-700 hover:scale-105"
-                      title="Перетащите на схему"
-                    >
-                      {g}
-                    </div>
-                  );
-                })}
+              
+              {/* Однокубитные гейты */}
+              <div className="grid grid-cols-5 gap-1.5">
+                {['H','X','Y','Z','S','T','Rx','Ry','Rz'].map((g) => (
+                  <div
+                    key={g}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('gateName', g);
+                      e.dataTransfer.setData('isTwoQubit', 'false');
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    className="px-2 py-1.5 rounded text-xs font-mono text-center transition-all cursor-grab active:cursor-grabbing bg-slate-800 text-slate-300 hover:bg-slate-700 hover:scale-105 select-none"
+                    title={`Перетащите ${g} на схему`}
+                  >
+                    {g}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Двухкубитные гейты */}
+              <div className="grid grid-cols-3 gap-1.5">
+                {['CNOT','CZ','SWAP'].map((g) => (
+                  <div
+                    key={g}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('gateName', g);
+                      e.dataTransfer.setData('isTwoQubit', 'true');
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    className="px-2 py-1.5 rounded text-xs font-mono text-center transition-all cursor-grab active:cursor-grabbing bg-amber-900/50 text-amber-300 hover:bg-amber-800/50 hover:scale-105 border border-amber-700/50 select-none"
+                    title={`Перетащите ${g} на схему (2 кубита)`}
+                  >
+                    {g}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -318,61 +332,119 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   max={20}
                   step={0.5}
                   value={perGateErrorProb}
-                  onChange={(e) => onGateErrorConfigChange({ ...gateErrorConfig, probability: parseFloat(e.target.value) / 100 })}
+                  onChange={(e) => onGateErrorConfigChange({ 
+                    ...gateErrorConfig, 
+                    probability: parseFloat(e.target.value) / 100,
+                    enabled: parseFloat(e.target.value) > 0
+                  })}
                   className="w-full accent-cyan-500"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { type: 'bit-flip' as GateErrorType, label: 'X' },
-                  { type: 'phase-flip' as GateErrorType, label: 'Z' },
-                  { type: 'bit-phase-flip' as GateErrorType, label: 'Y' },
-                  { type: 'depolarizing' as GateErrorType, label: 'Depol' }
-                ].map(({ type, label }) => (
-                    <button
-                      key={type}
-                      onClick={() => onGateErrorConfigChange({ ...gateErrorConfig, type })}
-                      className={`px-2 py-1 rounded text-xs transition-all ${
-                        perGateErrorType === type
-                          ? 'bg-cyan-500/30 text-cyan-200 ring-1 ring-cyan-500'
-                          : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                ))}
+              <div className="text-xs text-slate-400 mb-1">Тип ошибки:</div>
+              <div className="grid grid-cols-4 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    console.log('Clicked X');
+                    onGateErrorConfigChange({ 
+                      ...gateErrorConfig, 
+                      type: 'bit-flip',
+                      enabled: true
+                    });
+                  }}
+                  className={`px-2 py-2 rounded text-sm font-bold transition-all cursor-pointer ${
+                    perGateErrorType === 'bit-flip'
+                      ? 'bg-red-500/40 text-red-200 ring-2 ring-red-500'
+                      : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                  }`}
+                >
+                  X
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    console.log('Clicked Z');
+                    onGateErrorConfigChange({ 
+                      ...gateErrorConfig, 
+                      type: 'phase-flip',
+                      enabled: true
+                    });
+                  }}
+                  className={`px-2 py-2 rounded text-sm font-bold transition-all cursor-pointer ${
+                    perGateErrorType === 'phase-flip'
+                      ? 'bg-blue-500/40 text-blue-200 ring-2 ring-blue-500'
+                      : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                  }`}
+                >
+                  Z
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    console.log('Clicked Y');
+                    onGateErrorConfigChange({ 
+                      ...gateErrorConfig, 
+                      type: 'bit-phase-flip',
+                      enabled: true
+                    });
+                  }}
+                  className={`px-2 py-2 rounded text-sm font-bold transition-all cursor-pointer ${
+                    perGateErrorType === 'bit-phase-flip'
+                      ? 'bg-purple-500/40 text-purple-200 ring-2 ring-purple-500'
+                      : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                  }`}
+                >
+                  Y
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    console.log('Clicked Dep');
+                    onGateErrorConfigChange({ 
+                      ...gateErrorConfig, 
+                      type: 'depolarizing',
+                      enabled: true
+                    });
+                  }}
+                  className={`px-2 py-2 rounded text-sm font-bold transition-all cursor-pointer ${
+                    perGateErrorType === 'depolarizing'
+                      ? 'bg-cyan-500/40 text-cyan-200 ring-2 ring-cyan-500'
+                      : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                  }`}
+                >
+                  Dep
+                </button>
               </div>
             </div>
 
             {/* Информация о схеме */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-300">Схема гейтов</span>
-                <div className="flex gap-2">
+            <div className="space-y-2 p-2 bg-slate-800/30 rounded-lg">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-400">Схема: {customGatePlan.length} гейтов</span>
+                <div className="flex gap-1">
                   <button
-                    onClick={onRunCustomGatePlan}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    type="button"
+                    onClick={() => onRunCustomGatePlan()}
+                    className="px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-500 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                     disabled={customGatePlan.length === 0}
                   >
-                    Запустить схему
+                    ▶ Запуск
                   </button>
                   <button
-                    onClick={onClearCustomGatePlan}
-                    className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/50 text-xs"
+                    type="button"
+                    onClick={() => onClearCustomGatePlan()}
+                    className="px-2 py-1 rounded bg-red-500/30 text-red-300 hover:bg-red-500/40 text-xs disabled:opacity-40"
                     disabled={customGatePlan.length === 0}
                   >
-                    Очистить схему
+                    ✕
                   </button>
                 </div>
               </div>
-              {customGatePlan.length === 0 ? (
-                <p className="text-xs text-slate-500">Перетащите гейты на схему справа. Кликните на гейт, чтобы настроить ошибки.</p>
-              ) : (
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-400">Гейтов в схеме: {customGatePlan.length}</p>
-                  <p className="text-xs text-slate-500">💡 Кликните на гейт на схеме, чтобы настроить вероятность ошибки</p>
-                </div>
-              )}
+              <p className="text-xs text-slate-500">
+                {customGatePlan.length === 0 
+                  ? 'Перетащите гейты на схему справа'
+                  : '💡 Кликните на гейт для настройки ошибок'}
+              </p>
             </div>
 
             {/* Индикатор ожидания второго кубита */}

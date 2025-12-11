@@ -274,10 +274,15 @@ export class QECSimulator {
 
   /**
    * Apply a single custom gate with optional gate-error override
+   * This follows the mathematical model:
+   * - With probability (1-p): only apply gate G
+   * - With probability p: apply gate G, then error E
    */
   applyCustomGate(step: CustomGateStep): void {
     const { system, config } = this.state;
     const originalCfg = config.gateErrorConfig;
+    
+    // Set up gate error config for this specific gate
     if (step.errorProbability > 0) {
       system.setGateErrorConfig({
         enabled: true,
@@ -285,22 +290,69 @@ export class QECSimulator {
         probability: step.errorProbability,
         applyTo: step.applyTo ?? 'all'
       });
+    } else {
+      // Disable gate errors if probability is 0
+      system.setGateErrorConfig({
+        enabled: false,
+        type: 'none',
+        probability: 0,
+        applyTo: 'all'
+      });
     }
+    
+    // Apply the gate (system.applyGate handles error injection internally)
     system.applyGate(step.op);
-    // restore gate error config
+    
+    // Restore original gate error config
     system.setGateErrorConfig(originalCfg);
-
-    this.state.phase = 'correction';
+    
     this.saveSnapshot();
   }
 
   /**
    * Apply a full custom circuit (sequence of gates)
+   * After all gates, performs syndrome measurement and correction
    */
   applyCustomCircuit(plan: CustomGateStep[]): void {
+    const { system, config } = this.state;
+    
+    // Apply each gate in sequence
     for (const step of plan) {
       this.applyCustomGate(step);
     }
+    
+    // After all custom gates, perform syndrome measurement
+    if (config.codeType === 'repetition') {
+      const syndrome = measureSyndromeRepetition(system);
+      this.state.syndrome = syndrome;
+      system.logStep('measurement', `Измерение синдрома: (${syndrome[0]}, ${syndrome[1]})`);
+      
+      // Apply correction based on syndrome
+      const correctedQubit = correctErrorRepetition(system, syndrome as [number, number]);
+      if (correctedQubit !== null) {
+        this.state.correctedQubits = [correctedQubit];
+        system.logStep('correction', `Коррекция: применён X к q${correctedQubit}`);
+      } else {
+        this.state.correctedQubits = [];
+        system.logStep('correction', 'Синдром (0,0) — ошибок не обнаружено');
+      }
+    } else {
+      // Shor code
+      const result = measureAndCorrectShor(system);
+      this.state.syndrome = [...result.bitFlipSyndrome, ...result.phaseFlipSyndrome];
+      this.state.correctedQubits = [...result.bitCorrected, ...result.phaseCorrected];
+    }
+    
+    this.state.phase = 'correction';
+    this.saveSnapshot();
+    
+    // Calculate and log fidelity
+    const targetState = this.getTargetState();
+    const finalFidelity = system.state.fidelity(targetState);
+    system.logStep('decode', `Fidelity с целевым состоянием: ${(finalFidelity * 100).toFixed(2)}%`);
+    
+    this.state.phase = 'complete';
+    this.saveSnapshot();
   }
 
   /**

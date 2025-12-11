@@ -11,6 +11,30 @@ export interface QubitInfo {
   role: 'data' | 'ancilla' | 'syndrome';
 }
 
+export interface GateErrorDetails {
+  gateName: string;
+  errorType: 'X' | 'Y' | 'Z';
+  qubitIndex: number;
+  probability: number;
+  latexBefore: string; // LaTeX formula before error
+  latexAfter: string; // LaTeX formula after error
+  latexCorrection?: string; // LaTeX formula for correction (if available)
+}
+
+export interface CorrectionDetails {
+  syndrome: number[];
+  syndromeLatex: string;
+  correctedQubits: number[];
+  correctionLatex: string;
+  fidelityBefore: number;
+  fidelityAfter: number;
+  steps: Array<{
+    name: string;
+    description: string;
+    latex?: string;
+  }>;
+}
+
 export interface QuantumStep {
   type: 'gate' | 'measurement' | 'noise' | 'encode' | 'decode' | 'correction' | 'gate-error';
   operation?: GateOperation;
@@ -20,6 +44,11 @@ export interface QuantumStep {
   measurementResult?: number;
   qubitIndex?: number;
   timestamp: number;
+  // Extended fields for gate errors
+  gateErrorDetails?: GateErrorDetails;
+  latex?: string; // General LaTeX description
+  // Extended fields for correction
+  correctionDetails?: CorrectionDetails;
 }
 
 export interface SimulationLog {
@@ -157,7 +186,47 @@ export class QuantumSystem {
     }
   }
 
-  private applyGateErrorIfNeeded(qubits: number[]): void {
+  private generateGateErrorLatex(gateName: string, errorType: string, qubitIndex: number): { before: string; after: string; general: string } {
+    const qLabel = `q_{${qubitIndex}}`;
+    const errorName = errorType === 'X' ? 'X' : errorType === 'Z' ? 'Z' : 'Y';
+    
+    // General formula
+    const general = `|\\psi'\\rangle = ${errorName} \\cdot G|\\psi\\rangle`;
+    
+    // Specific formulas based on gate type
+    let before = `G|\\psi\\rangle`;
+    let after = `${errorName} \\cdot G|\\psi\\rangle`;
+    
+    switch (gateName) {
+      case 'H':
+        before = `H|\\psi\\rangle_{${qLabel}}`;
+        after = `${errorName} \\cdot H|\\psi\\rangle_{${qLabel}}`;
+        break;
+      case 'X':
+        before = `X|\\psi\\rangle_{${qLabel}}`;
+        after = `${errorName} \\cdot X|\\psi\\rangle_{${qLabel}}`;
+        break;
+      case 'CNOT':
+        before = `\\text{CNOT}|\\psi\\rangle`;
+        if (qubitIndex === 1) {
+          after = `(I \\otimes ${errorName}) \\cdot \\text{CNOT}|\\psi\\rangle`;
+        } else {
+          after = `(${errorName} \\otimes I) \\cdot \\text{CNOT}|\\psi\\rangle`;
+        }
+        break;
+      case 'CZ':
+        before = `\\text{CZ}|\\psi\\rangle`;
+        after = `(I_{\\bar{${qLabel}}} \\otimes ${errorName}_{${qLabel}}) \\cdot \\text{CZ}|\\psi\\rangle`;
+        break;
+      default:
+        before = `${gateName}|\\psi\\rangle_{${qLabel}}`;
+        after = `${errorName} \\cdot ${gateName}|\\psi\\rangle_{${qLabel}}`;
+    }
+    
+    return { before, after, general };
+  }
+
+  private applyGateErrorIfNeeded(qubits: number[], appliedGateName?: string): void {
     if (!this.shouldApplyGateError(qubits.length)) return;
 
     for (const q of qubits) {
@@ -166,14 +235,29 @@ export class QuantumSystem {
 
       const stateBefore = this.state.clone();
       applyGateInternal(this.state, errorOp);
+      
+      const errorType = errorOp.name as 'X' | 'Y' | 'Z';
+      const probability = this.gateErrorConfig?.probability ?? 0;
+      const gateName = appliedGateName || 'Gate';
+      const latex = this.generateGateErrorLatex(gateName, errorType, q);
 
       this.history.push({
         type: 'gate-error',
         operation: errorOp,
-        description: `Gate error ${errorOp.name} on ${this.qubits[q]?.label || `q${q}`} (p=${((this.gateErrorConfig?.probability ?? 0) * 100).toFixed(2)}%)`,
+        description: `Gate Error: ${errorType} на q${q} после гейта ${gateName}`,
         stateBefore,
         stateAfter: this.state.clone(),
-        timestamp: this.stepCounter++
+        timestamp: this.stepCounter++,
+        qubitIndex: q,
+        latex: latex.general,
+        gateErrorDetails: {
+          gateName,
+          errorType,
+          qubitIndex: q,
+          probability,
+          latexBefore: latex.before,
+          latexAfter: latex.after
+        }
       });
     }
   }
@@ -188,16 +272,45 @@ export class QuantumSystem {
     const qubitsStr = op.qubits.map(q => this.qubits[q]?.label || `q${q}`).join(', ');
     const description = `Apply ${op.label || op.name} to ${qubitsStr}`;
     
+    // Generate LaTeX for the gate operation
+    const latex = this.generateGateLatex(op);
+    
     this.history.push({
       type: 'gate',
       operation: op,
       description,
       stateBefore,
       stateAfter: this.state.clone(),
-      timestamp: this.stepCounter++
+      timestamp: this.stepCounter++,
+      latex
     });
 
-    this.applyGateErrorIfNeeded(op.qubits);
+    this.applyGateErrorIfNeeded(op.qubits, op.name);
+  }
+  
+  /**
+   * Generate LaTeX formula for gate operation
+   */
+  private generateGateLatex(op: GateOperation): string {
+    const qubits = op.qubits.map(q => `q_{${q}}`).join(',');
+    switch (op.name) {
+      case 'H':
+        return `H_{${qubits}}|\\psi\\rangle = \\frac{1}{\\sqrt{2}}(|0\\rangle + |1\\rangle)`;
+      case 'X':
+        return `X_{${qubits}}|\\psi\\rangle: |0\\rangle \\leftrightarrow |1\\rangle`;
+      case 'Y':
+        return `Y_{${qubits}}|\\psi\\rangle: |0\\rangle \\to i|1\\rangle, |1\\rangle \\to -i|0\\rangle`;
+      case 'Z':
+        return `Z_{${qubits}}|\\psi\\rangle: |1\\rangle \\to -|1\\rangle`;
+      case 'CNOT':
+        return `\\text{CNOT}_{${qubits}}: |1\\rangle_c|x\\rangle_t \\to |1\\rangle_c|x \\oplus 1\\rangle_t`;
+      case 'CZ':
+        return `\\text{CZ}_{${qubits}}: |11\\rangle \\to -|11\\rangle`;
+      case 'SWAP':
+        return `\\text{SWAP}_{${qubits}}: |ab\\rangle \\to |ba\\rangle`;
+      default:
+        return `${op.name}_{${qubits}}|\\psi\\rangle`;
+    }
   }
 
   /**
@@ -207,7 +320,7 @@ export class QuantumSystem {
     const stateBefore = this.state.clone();
     
     for (const op of ops) {
-      applyGate(this.state, op);
+      applyGateInternal(this.state, op);
     }
     
     this.history.push({

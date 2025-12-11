@@ -39,6 +39,7 @@ import { EventLog } from './components/EventLog';
 import { SyndromeTable } from './components/SyndromeTable';
 import { QBERChart, QBERIndicator } from './components/QBERChart';
 import { StateDisplay, LogicalStateIndicator } from './components/StateDisplay';
+import { CorrectionDetailsModal } from './components/CorrectionDetailsModal';
 
 import './App.css';
 
@@ -64,6 +65,7 @@ const App: React.FC = () => {
   const [showBlochSpheres, setShowBlochSpheres] = useState(false);
   const [showQBERChart, setShowQBERChart] = useState(true);
   const [selectedQubit, setSelectedQubit] = useState(0);
+  const [showCorrectionDetails, setShowCorrectionDetails] = useState(false);
   
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -195,7 +197,12 @@ const App: React.FC = () => {
   };
 
   const handleAddCustomGate = (step: CustomGateStep) => {
-    setCustomGatePlan((prev) => [...prev, step]);
+    console.log('handleAddCustomGate: Adding step to plan:', step);
+    setCustomGatePlan((prev) => {
+      const newPlan = [...prev, step];
+      console.log('New customGatePlan:', newPlan);
+      return newPlan;
+    });
   };
 
   const handleRemoveCustomGate = (index: number) => {
@@ -227,24 +234,27 @@ const App: React.FC = () => {
   };
 
   const handleGateDrop = (gateName: string, qubitIndex: number, isTwoQubit: boolean) => {
+    console.log('handleGateDrop called:', { gateName, qubitIndex, isTwoQubit, gateErrorConfig });
+    
     if (isTwoQubit) {
       if (pendingTwoQubitGate && pendingTwoQubitGate.gateName === gateName) {
         // Second qubit selected - add gate
         const op: GateOperation = {
           name: gateName as GateOperation['name'],
-          qubits: gateName === 'CNOT' || gateName === 'CZ' 
-            ? [pendingTwoQubitGate.firstQubit, qubitIndex]
-            : [pendingTwoQubitGate.firstQubit, qubitIndex]
+          qubits: [pendingTwoQubitGate.firstQubit, qubitIndex]
         };
-        handleAddCustomGate({
+        const newStep = {
           op,
           errorProbability: gateErrorConfig.probability,
           errorType: gateErrorConfig.type,
           applyTo: gateErrorConfig.applyTo
-        });
+        };
+        console.log('Adding two-qubit gate:', newStep);
+        handleAddCustomGate(newStep);
         setPendingTwoQubitGate(null);
       } else {
         // First qubit selected - wait for second
+        console.log('Waiting for second qubit for:', gateName);
         setPendingTwoQubitGate({ gateName, firstQubit: qubitIndex });
       }
     } else {
@@ -253,12 +263,14 @@ const App: React.FC = () => {
         name: gateName as GateOperation['name'],
         qubits: [qubitIndex]
       };
-      handleAddCustomGate({
+      const newStep = {
         op,
         errorProbability: gateErrorConfig.probability,
         errorType: gateErrorConfig.type,
         applyTo: gateErrorConfig.applyTo
-      });
+      };
+      console.log('Adding single-qubit gate:', newStep);
+      handleAddCustomGate(newStep);
     }
   };
 
@@ -529,6 +541,17 @@ const App: React.FC = () => {
               errorsApplied={simulator?.getState().noiseEvents.filter(e => e.applied).length ?? 0}
               noiseType={noiseType}
             />
+            
+            {/* View Correction Details Button */}
+            {simulator && phase === 'complete' && (
+              <button
+                onClick={() => setShowCorrectionDetails(true)}
+                className="w-full px-4 py-3 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 border border-cyan-500/30 rounded-xl text-cyan-300 text-sm font-medium transition-all flex items-center justify-center gap-2"
+              >
+                <Info className="w-4 h-4" />
+                Просмотреть процесс коррекции
+              </button>
+            )}
 
             {/* QBER Indicator */}
             <QBERIndicator
@@ -698,6 +721,38 @@ const App: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Correction Details Modal */}
+      {simulator && (
+        <CorrectionDetailsModal
+          isOpen={showCorrectionDetails}
+          onClose={() => setShowCorrectionDetails(false)}
+          steps={simulator.getHistory()}
+          syndrome={simulator.getState().syndrome}
+          correctedQubits={simulator.getState().correctedQubits}
+          codeType={codeType}
+          fidelityBefore={(() => {
+            // Calculate fidelity before correction (approximation)
+            const history = simulator.getHistory();
+            const correctionStep = history.findIndex(s => s.type === 'correction');
+            if (correctionStep > 0) {
+              const stateBefore = history[correctionStep - 1]?.stateAfter;
+              if (stateBefore) {
+                if (codeType === 'repetition') {
+                  const target = initialState === 'zero' ? getLogicalZeroState() :
+                                 initialState === 'one' ? getLogicalOneState() :
+                                 initialState === 'plus' ? getLogicalPlusState() : getLogicalMinusState();
+                  return stateBefore.fidelity(target);
+                }
+              }
+            }
+            return fidelities.zero < 0.5 ? fidelities.zero : 1 - fidelities.zero;
+          })()}
+          fidelityAfter={initialState === 'zero' ? fidelities.zero : 
+                        initialState === 'one' ? fidelities.one :
+                        initialState === 'plus' ? fidelities.plus : fidelities.minus}
+        />
+      )}
 
       {/* Footer */}
       <footer className="border-t border-slate-800 mt-12 py-6">

@@ -38,13 +38,19 @@ const GATE_COLORS: Record<string, string> = {
   CZ: '#06b6d4',
   S: '#ec4899',
   T: '#8b5cf6',
+  Rx: '#f97316',
+  Ry: '#84cc16',
+  Rz: '#0ea5e9',
+  SWAP: '#14b8a6',
   noise: '#dc2626',
+  'gate-error': '#f97316', // Orange for gate errors
   correction: '#10b981',
   measurement: '#6366f1'
 };
 
 const getGateColor = (name: string, type: string): string => {
-  if (type === 'noise' || type === 'gate-error') return GATE_COLORS.noise;
+  if (type === 'gate-error') return GATE_COLORS['gate-error'];
+  if (type === 'noise') return GATE_COLORS.noise;
   if (type === 'correction') return GATE_COLORS.correction;
   if (type === 'measurement') return GATE_COLORS.measurement;
   return GATE_COLORS[name] || '#64748b';
@@ -62,8 +68,11 @@ function parseStepsToGates(steps: QuantumStep[]): CircuitGate[] {
     
     if (step.operation) {
       // Step has explicit gate operation
+      const isGateError = step.type === 'gate-error';
       gates.push({
-        name: step.operation.label || step.operation.name,
+        name: isGateError 
+          ? `${step.operation.name}!` // Mark gate errors with !
+          : (step.operation.label || step.operation.name),
         qubits: step.operation.qubits,
         column,
         type: step.type,
@@ -103,12 +112,24 @@ function parseStepsToGates(steps: QuantumStep[]): CircuitGate[] {
         name = 'X!';
       } else if (desc.includes('z error') || desc.includes('phase-flip')) {
         name = 'Z!';
-      } else if (desc.includes('y error')) {
+      } else if (desc.includes('y error') || desc.includes('bit-phase')) {
         name = 'Y!';
+      } else if (desc.includes('depolarizing')) {
+        // Extract the actual error type from depolarizing
+        if (desc.includes(' x ')) name = 'X!';
+        else if (desc.includes(' y ')) name = 'Y!';
+        else if (desc.includes(' z ')) name = 'Z!';
+        else name = 'D!';
       } else if (desc.includes('corrected') || desc.includes('correction')) {
         name = '✓';
       } else if (desc.includes('no error')) {
         name = '—';
+      } else if (desc.includes('gate error')) {
+        // Gate error without operation info
+        if (desc.includes(' x ')) name = 'X⚡';
+        else if (desc.includes(' y ')) name = 'Y⚡';
+        else if (desc.includes(' z ')) name = 'Z⚡';
+        else name = '⚡';
       }
       
       gates.push({
@@ -136,6 +157,7 @@ const GateBox: React.FC<{
 }> = ({ gate, x, y, isActive, onClick }) => {
   const color = getGateColor(gate.name, gate.type);
   const displayName = gate.name.replace(/[₀₁₂₃₄₅₆₇₈₉]/g, '').replace(/\(.*\)/, '');
+  const isGateError = gate.type === 'gate-error';
   
   return (
     <motion.g
@@ -152,12 +174,25 @@ const GateBox: React.FC<{
         height={30}
         rx={5}
         fill={isActive ? color : `${color}88`}
-        stroke={color}
-        strokeWidth={isActive ? 2 : 1}
+        stroke={isGateError ? '#fff' : color}
+        strokeWidth={isGateError ? 2 : (isActive ? 2 : 1)}
+        strokeDasharray={isGateError ? '3,2' : 'none'}
         animate={{
-          filter: isActive ? 'drop-shadow(0 0 8px ' + color + ')' : 'none'
+          filter: isActive ? `drop-shadow(0 0 8px ${color})` : 'none'
         }}
       />
+      {/* Lightning bolt indicator for gate errors */}
+      {isGateError && (
+        <text
+          x={x + 14}
+          y={y - 10}
+          textAnchor="middle"
+          fill="#fbbf24"
+          fontSize={10}
+        >
+          ⚡
+        </text>
+      )}
       <text
         x={x}
         y={y + 4}
@@ -333,13 +368,17 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
     };
   }, [isDroppable]);
   const gates = parseStepsToGates(steps);
-  const numColumns = Math.max(gates.length > 0 ? Math.max(...gates.map(g => g.column)) + 1 : 1, 1);
+  const baseNumColumns = Math.max(gates.length > 0 ? Math.max(...gates.map(g => g.column)) + 1 : 1, 1);
+  // Add extra columns for custom gates + space for new gates
+  const customGateColumns = customGatePlan.length;
+  const extraSpace = isDroppable ? 3 : 0; // Extra space when in drop mode
+  const totalColumns = baseNumColumns + customGateColumns + extraSpace;
   
   const wireSpacing = 50;
-  const columnWidth = 50;
-  const padding = { left: 60, right: 30, top: 30, bottom: 30 };
+  const columnWidth = 55;
+  const padding = { left: 70, right: 40, top: 30, bottom: 30 };
   
-  const width = Math.max(padding.left + numColumns * columnWidth + padding.right, 500);
+  const width = Math.max(padding.left + totalColumns * columnWidth + padding.right, 400);
   const height = padding.top + (numQubits - 1) * wireSpacing + padding.bottom;
   
   const getQubitY = (qubit: number) => padding.top + qubit * wireSpacing;
@@ -351,12 +390,37 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
     : -1;
   
   return (
-    <div className="w-full overflow-x-auto bg-slate-900/50 rounded-xl p-4 relative">
+    <div 
+      className="w-full overflow-x-auto bg-slate-900/50 rounded-xl p-4 relative" 
+      style={{ minHeight: height + 32 }}
+      onDragOver={(e) => {
+        if (isDroppable) {
+          e.preventDefault();
+          if (!isDragging) setIsDragging(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (isDroppable) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          if (e.clientX < rect.left || e.clientX > rect.right || 
+              e.clientY < rect.top || e.clientY > rect.bottom) {
+            setIsDragging(false);
+            setDraggedOverQubit(null);
+          }
+        }
+      }}
+      onDrop={(e) => {
+        if (isDroppable) {
+          e.preventDefault();
+          setIsDragging(false);
+        }
+      }}
+    >
       <svg 
-        width={Math.max(width, 400)} 
+        width={width} 
         height={height}
-        className="min-w-full"
-        style={{ position: 'relative', zIndex: 1, pointerEvents: 'auto' }}
+        viewBox={`0 0 ${width} ${height}`}
+        style={{ display: 'block' }}
       >
         {/* Qubit wires and labels */}
         {Array.from({ length: numQubits }, (_, i) => (
@@ -442,9 +506,9 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
           return null;
         })}
         
-        {/* Custom gates from plan */}
-        {isDroppable && customGatePlan.map((customGate, idx) => {
-          const customColumn = numColumns + idx;
+        {/* Custom gates from plan - always show when there are custom gates */}
+        {customGatePlan.map((customGate, idx) => {
+          const customColumn = baseNumColumns + idx;
           const x = getColumnX(customColumn);
           const gate = {
             name: customGate.op.name,
@@ -454,28 +518,40 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             label: customGate.op.name
           };
           
+          const handleClick = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            onCustomGateClick?.(idx);
+          };
+          
           // Handle two-qubit gates
           if ((gate.name === 'CNOT' || gate.name === 'CZ' || gate.name === 'SWAP') && gate.qubits.length === 2) {
             return (
-              <g key={`custom-${idx}`}>
+              <g key={`custom-${idx}`} style={{ cursor: 'pointer' }} onClick={handleClick}>
                 <CNOTGate
                   controlY={getQubitY(gate.qubits[0])}
                   targetY={getQubitY(gate.qubits[1])}
                   x={x}
                   isActive={true}
-                  onClick={() => onCustomGateClick?.(idx)}
+                />
+                {/* Clickable overlay */}
+                <rect
+                  x={x - 20}
+                  y={Math.min(getQubitY(gate.qubits[0]), getQubitY(gate.qubits[1])) - 20}
+                  width={40}
+                  height={Math.abs(getQubitY(gate.qubits[0]) - getQubitY(gate.qubits[1])) + 40}
+                  fill="transparent"
+                  style={{ cursor: 'pointer' }}
                 />
                 {/* Error probability indicator */}
                 {customGate.errorProbability > 0 && (
                   <text
                     x={x}
-                    y={getQubitY(Math.min(...gate.qubits)) - 10}
+                    y={getQubitY(Math.min(...gate.qubits)) - 20}
                     textAnchor="middle"
                     fill="#ef4444"
                     fontSize={10}
                     fontFamily="monospace"
                     style={{ cursor: 'pointer' }}
-                    onClick={() => onCustomGateClick?.(idx)}
                   >
                     {Math.round(customGate.errorProbability * 1000) / 10}%
                   </text>
@@ -486,25 +562,32 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
           
           // Single-qubit gates
           return gate.qubits.map((qubit, qIdx) => (
-            <g key={`custom-${idx}-${qIdx}`}>
+            <g key={`custom-${idx}-${qIdx}`} style={{ cursor: 'pointer' }} onClick={handleClick}>
               <GateBox
                 gate={gate}
                 x={x}
                 y={getQubitY(qubit)}
                 isActive={true}
-                onClick={() => onCustomGateClick?.(idx)}
+              />
+              {/* Clickable overlay for better hit detection */}
+              <rect
+                x={x - 22}
+                y={getQubitY(qubit) - 19}
+                width={44}
+                height={38}
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
               />
               {/* Error probability indicator */}
               {customGate.errorProbability > 0 && (
                 <text
                   x={x}
-                  y={getQubitY(qubit) - 10}
+                  y={getQubitY(qubit) - 20}
                   textAnchor="middle"
                   fill="#ef4444"
                   fontSize={10}
                   fontFamily="monospace"
                   style={{ cursor: 'pointer' }}
-                  onClick={() => onCustomGateClick?.(idx)}
                 >
                   {Math.round(customGate.errorProbability * 1000) / 10}%
                 </text>
@@ -566,7 +649,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
           <line
             x1={padding.left - 15}
             y1={height - 5}
-            x2={getColumnX(Math.min(currentColumnIndex, numColumns - 1)) + columnWidth / 2}
+            x2={getColumnX(Math.min(currentColumnIndex, baseNumColumns - 1)) + columnWidth / 2}
             y2={height - 5}
             stroke="#22c55e"
             strokeWidth={4}
@@ -575,7 +658,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
         )}
         
         {/* Current step highlight - box around current gate */}
-        {currentColumnIndex >= 0 && currentColumnIndex < numColumns && (
+        {currentColumnIndex >= 0 && currentColumnIndex < baseNumColumns && (
           <motion.rect
             x={getColumnX(currentColumnIndex) - columnWidth / 2 + 2}
             y={padding.top - 20}
@@ -592,73 +675,74 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
         )}
       </svg>
       
-      {/* Droppable zones overlay for drag-and-drop - positioned above SVG */}
+      {/* Droppable zones - visible and interactive only when dragging or in drop mode */}
       {isDroppable && (
-        <div 
-          className="absolute pointer-events-none"
-          style={{ 
-            zIndex: 10,
-            top: '16px', // p-4 = 16px
-            left: '16px',
-            width: `${Math.max(width, 400)}px`,
-            height: `${height}px`
-          }}
-        >
+        <>
           {Array.from({ length: numQubits }, (_, i) => {
-            const svgWidth = Math.max(width, 400);
+            const isHighlighted = draggedOverQubit === i;
+            const zoneTop = 16 + padding.top + i * wireSpacing - 18;
+            const zoneLeft = 16 + padding.left - 20;
+            const zoneWidth = width - padding.left - padding.right + 40;
+            
             return (
               <div
                 key={`drop-zone-${i}`}
-                className="absolute"
+                className="absolute transition-all duration-150"
                 style={{
-                  left: `${padding.left - 30}px`,
-                  top: `${padding.top + i * wireSpacing - 20}px`,
-                  width: `${svgWidth - padding.left + 30 - padding.right}px`,
-                  height: '40px',
-                  backgroundColor: draggedOverQubit === i ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
-                  border: draggedOverQubit === i ? '2px dashed #06b6d4' : '1px dashed transparent',
-                  borderRadius: '4px',
-                  transition: 'all 0.2s',
-                  cursor: isDragging ? 'copy' : 'default',
-                  pointerEvents: isDragging ? 'auto' : 'none' // Only enable during drag
+                  left: `${zoneLeft}px`,
+                  top: `${zoneTop}px`,
+                  width: `${zoneWidth}px`,
+                  height: '36px',
+                  backgroundColor: isHighlighted 
+                    ? 'rgba(6, 182, 212, 0.25)' 
+                    : isDragging 
+                      ? 'rgba(6, 182, 212, 0.1)' 
+                      : 'transparent',
+                  border: isHighlighted 
+                    ? '2px solid #06b6d4' 
+                    : isDragging 
+                      ? '1px dashed rgba(6, 182, 212, 0.5)'
+                      : '1px dashed transparent',
+                  borderRadius: '6px',
+                  zIndex: 20,
+                  pointerEvents: 'auto'
                 }}
                 onDragEnter={(e) => {
                   e.preventDefault();
-                  e.stopPropagation();
+                  setIsDragging(true);
+                  setDraggedOverQubit(i);
                 }}
                 onDragOver={(e) => {
                   e.preventDefault();
-                  e.stopPropagation();
                   e.dataTransfer.dropEffect = 'copy';
-                  if (draggedOverQubit !== i) {
-                    setDraggedOverQubit(i);
-                  }
+                  if (draggedOverQubit !== i) setDraggedOverQubit(i);
                 }}
-                onDragLeave={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  // Check if we're actually leaving the drop zone
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const x = e.clientX;
-                  const y = e.clientY;
-                  if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-                    setDraggedOverQubit(null);
-                  }
+                onDragLeave={() => {
+                  setDraggedOverQubit(null);
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setDraggedOverQubit(null);
                   const gateName = e.dataTransfer.getData('gateName');
                   const isTwoQubit = e.dataTransfer.getData('isTwoQubit') === 'true';
+                  console.log('Drop:', gateName, 'on qubit', i);
+                  setDraggedOverQubit(null);
+                  setIsDragging(false);
                   if (gateName && onGateDrop) {
                     onGateDrop(gateName, i, isTwoQubit);
                   }
                 }}
-              />
+              >
+                {/* Label for qubit */}
+                {isDragging && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-cyan-400 font-mono">
+                    q{i}
+                  </span>
+                )}
+              </div>
             );
           })}
-        </div>
+        </>
       )}
     </div>
   );
@@ -674,17 +758,18 @@ export const CircuitLegend: React.FC = () => {
     { color: GATE_COLORS.Y, label: 'Y (Combined)' },
     { color: GATE_COLORS.H, label: 'H (Hadamard)' },
     { color: GATE_COLORS.CNOT, label: 'CNOT' },
-    { color: GATE_COLORS.noise, label: 'Noise' },
-    { color: GATE_COLORS.correction, label: 'Correction' },
-    { color: GATE_COLORS.measurement, label: 'Measurement' }
+    { color: GATE_COLORS.noise, label: 'Шум (Noise)' },
+    { color: GATE_COLORS['gate-error'], label: 'Ошибка гейта' },
+    { color: GATE_COLORS.correction, label: 'Коррекция' },
+    { color: GATE_COLORS.measurement, label: 'Измерение' }
   ];
   
   return (
-    <div className="flex flex-wrap gap-4 p-3 bg-slate-800/50 rounded-lg">
+    <div className="flex flex-wrap gap-3 p-2 bg-slate-800/50 rounded-lg">
       {items.map(item => (
-        <div key={item.label} className="flex items-center gap-2">
+        <div key={item.label} className="flex items-center gap-1.5">
           <div 
-            className="w-4 h-4 rounded"
+            className="w-3 h-3 rounded"
             style={{ backgroundColor: item.color }}
           />
           <span className="text-xs text-slate-400">{item.label}</span>
