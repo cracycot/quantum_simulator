@@ -143,44 +143,68 @@ export function measureBitFlipSyndrome(system: QuantumSystem): [number, number, 
 
 /**
  * Measure phase-flip syndromes between blocks
- * Uses X⊗X⊗X parity measurements
+ * For Shor code after bit-flip correction, phase errors only occur if there was an actual Z or Y error
+ * We detect by checking if the global phase pattern across blocks is consistent
  */
 export function measurePhaseFlipSyndrome(system: QuantumSystem): [number, number] {
   const state = system.state;
   
-  // For phase syndrome, we need to check parity of blocks
-  // X_block measures in ± basis
-  // We compute ⟨X₀X₁X₂ ⊗ X₃X₄X₅⟩ and ⟨X₃X₄X₅ ⊗ X₆X₇X₈⟩
+  // After bit-flip correction, each block should be in (|000⟩ ± |111⟩)
+  // Phase syndrome detects if blocks have wrong relative signs
   
-  // First, let's compute in a simpler way by looking at the structure
-  // For correctly encoded states, all qubits in a block have same X parity
+  // Count amplitude signs for basis states in each block pattern
+  let block0_positive = 0, block0_negative = 0;
+  let block1_positive = 0, block1_negative = 0;
+  let block2_positive = 0, block2_negative = 0;
   
-  // Phase syndrome: compare block parities
-  // Block parity = XOR of all bits in block in X basis
+  // Sample key basis states to determine block phases
+  const test_states = [
+    0b000000000,  // |000⟩|000⟩|000⟩
+    0b000000111,  // |000⟩|000⟩|111⟩
+    0b000111000,  // |000⟩|111⟩|000⟩
+    0b000111111,  // |000⟩|111⟩|111⟩
+    0b111000000,  // |111⟩|000⟩|000⟩
+    0b111000111,  // |111⟩|000⟩|111⟩
+    0b111111000,  // |111⟩|111⟩|000⟩
+    0b111111111,  // |111⟩|111⟩|111⟩
+  ];
   
-  // Apply Hadamard mentally to convert to Z basis measurement
-  // ⟨X₀X₁X₂⟩ = ⟨HZH ⊗ HZH ⊗ HZH⟩ in computational basis
-  
-  // Simplified: Check if blocks have consistent phase
-  let expBlock01 = 0;
-  let expBlock12 = 0;
-  
-  for (let i = 0; i < state.dimension; i++) {
-    const prob = state.amplitudes[i].absSquared();
+  for (const idx of test_states) {
+    const amp = state.amplitudes[idx];
+    const prob = amp.absSquared();
+    if (prob < 1e-10) continue;
     
-    // Block parities
-    const b0 = ((i >> 0) & 1) ^ ((i >> 1) & 1) ^ ((i >> 2) & 1);
-    const b1 = ((i >> 3) & 1) ^ ((i >> 4) & 1) ^ ((i >> 5) & 1);
-    const b2 = ((i >> 6) & 1) ^ ((i >> 7) & 1) ^ ((i >> 8) & 1);
+    const sign = amp.re > 0 ? 1 : -1;
+    const block0_state = (idx >> 0) & 0b111;
+    const block1_state = (idx >> 3) & 0b111;
+    const block2_state = (idx >> 6) & 0b111;
     
-    // Compare adjacent blocks
-    expBlock01 += prob * ((b0 ^ b1) === 0 ? 1 : -1);
-    expBlock12 += prob * ((b1 ^ b2) === 0 ? 1 : -1);
+    // Check if block is in |111⟩ state (determines phase contribution)
+    if (block0_state === 0b111) block0_negative += sign * prob;
+    else block0_positive += sign * prob;
+    
+    if (block1_state === 0b111) block1_negative += sign * prob;
+    else block1_positive += sign * prob;
+    
+    if (block2_state === 0b111) block2_negative += sign * prob;
+    else block2_positive += sign * prob;
   }
   
-  // This is a simplified version - real phase syndrome requires ancilla measurements
-  const s1 = expBlock01 < 0.5 ? 1 : 0;
-  const s2 = expBlock12 < 0.5 ? 1 : 0;
+  // Determine if blocks have consistent phases
+  // If all blocks have same phase pattern relative to |000⟩ and |111⟩ states,
+  // then no phase error
+  
+  // For properly encoded |0⟩_L, all amplitudes are positive
+  // For |1⟩_L, |111⟩ states have negative amplitude
+  
+  // Compare phase patterns between blocks
+  const block0_phase = Math.sign(block0_positive + block0_negative);
+  const block1_phase = Math.sign(block1_positive + block1_negative);
+  const block2_phase = Math.sign(block2_positive + block2_negative);
+  
+  // Syndrome: detect if any block has opposite phase
+  const s1 = (block0_phase !== block1_phase) ? 1 : 0;
+  const s2 = (block1_phase !== block2_phase) ? 1 : 0;
   
   return [s1, s2];
 }

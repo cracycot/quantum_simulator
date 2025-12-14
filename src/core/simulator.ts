@@ -305,7 +305,7 @@ export class QECSimulator {
     
     // Restore original gate error config
     system.setGateErrorConfig(originalCfg);
-    
+
     this.saveSnapshot();
   }
 

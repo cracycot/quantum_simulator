@@ -718,7 +718,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                   if (draggedOverQubit !== i) setDraggedOverQubit(i);
                 }}
                 onDragLeave={() => {
-                  setDraggedOverQubit(null);
+                    setDraggedOverQubit(null);
                 }}
                 onDrop={(e) => {
                   e.preventDefault();

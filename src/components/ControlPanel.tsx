@@ -301,19 +301,19 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               {/* Двухкубитные гейты */}
               <div className="grid grid-cols-3 gap-1.5">
                 {['CNOT','CZ','SWAP'].map((g) => (
-                  <div
-                    key={g}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('gateName', g);
+                    <div
+                      key={g}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('gateName', g);
                       e.dataTransfer.setData('isTwoQubit', 'true');
-                      e.dataTransfer.effectAllowed = 'copy';
-                    }}
+                        e.dataTransfer.effectAllowed = 'copy';
+                      }}
                     className="px-2 py-1.5 rounded text-xs font-mono text-center transition-all cursor-grab active:cursor-grabbing bg-amber-900/50 text-amber-300 hover:bg-amber-800/50 hover:scale-105 border border-amber-700/50 select-none"
                     title={`Перетащите ${g} на схему (2 кубита)`}
-                  >
-                    {g}
-                  </div>
+                    >
+                      {g}
+                    </div>
                 ))}
               </div>
             </div>

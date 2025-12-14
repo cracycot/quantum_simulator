@@ -239,9 +239,9 @@ const EventLogItem: React.FC<{
                   <Eye className="w-3 h-3 text-orange-400" />
                 </button>
               )}
-              <span className="text-xs text-slate-500">
-                #{idx + 1}
-              </span>
+            <span className="text-xs text-slate-500">
+              #{idx + 1}
+            </span>
             </div>
           </div>
           <p className={`text-sm truncate ${isFutureStep ? 'text-slate-600' : 'text-slate-400'}`}>
@@ -289,13 +289,13 @@ const EventLogItem: React.FC<{
                   <div className="text-slate-400">
                     Ошибка: <span className="text-red-300 font-mono">{step.gateErrorDetails.errorType}</span>
                   </div>
-                  <div className="text-slate-400">
+                    <div className="text-slate-400">
                     Кубит: <span className="text-slate-300 font-mono">q{step.gateErrorDetails.qubitIndex}</span>
-                  </div>
-                  <div className="text-slate-400">
+                    </div>
+                    <div className="text-slate-400">
                     p = <span className="text-amber-300 font-mono">{(step.gateErrorDetails.probability * 100).toFixed(1)}%</span>
                   </div>
-                </div>
+                    </div>
                 <div className="bg-slate-800 rounded p-2 overflow-x-auto">
                   <SafeLatex formula={step.gateErrorDetails.latexAfter} />
                 </div>
@@ -345,57 +345,57 @@ export const EventLog: React.FC<EventLogProps> = ({
 
   return (
     <>
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Activity className="w-4 h-4 text-cyan-400" />
-            Лог событий
-          </h3>
-          <div className="flex items-center gap-2">
-            {gateErrorCount > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                ⚡ {gateErrorCount} ошибок
-              </span>
-            )}
-            <span className="text-xs text-slate-500">
-              {currentStep !== undefined ? `${Math.min(currentStep, steps.length)}/${steps.length}` : `${steps.length}`} операций
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <Activity className="w-4 h-4 text-cyan-400" />
+          Лог событий
+        </h3>
+        <div className="flex items-center gap-2">
+          {gateErrorCount > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+              ⚡ {gateErrorCount} ошибок
             </span>
-          </div>
-        </div>
-        
-        <div 
-          ref={scrollRef}
-          className="p-2 space-y-1 overflow-y-auto"
-          style={{ maxHeight }}
-        >
-          {steps.map((step, idx) => {
-            const isCurrentStep = idx === currentStepIndex;
-            const isPastStep = idx < currentStepIndex;
-            const isFutureStep = idx > currentStepIndex;
-            
-            return (
-              <EventLogItem
-                key={`${step.timestamp}-${idx}`}
-                step={step}
-                idx={idx}
-                isCurrentStep={isCurrentStep}
-                isPastStep={isPastStep}
-                isFutureStep={isFutureStep}
-                currentItemRef={currentItemRef}
-                onViewDetails={() => handleViewDetails(step)}
-              />
-            );
-          })}
-          
-          {steps.length === 0 && (
-            <div className="p-8 text-center text-slate-500">
-              <Zap className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Нет событий</p>
-              <p className="text-xs mt-1">Запустите симуляцию для просмотра лога</p>
-            </div>
           )}
+          <span className="text-xs text-slate-500">
+            {currentStep !== undefined ? `${Math.min(currentStep, steps.length)}/${steps.length}` : `${steps.length}`} операций
+          </span>
         </div>
       </div>
+      
+      <div 
+        ref={scrollRef}
+        className="p-2 space-y-1 overflow-y-auto"
+        style={{ maxHeight }}
+      >
+        {steps.map((step, idx) => {
+          const isCurrentStep = idx === currentStepIndex;
+          const isPastStep = idx < currentStepIndex;
+          const isFutureStep = idx > currentStepIndex;
+          
+          return (
+            <EventLogItem
+              key={`${step.timestamp}-${idx}`}
+              step={step}
+              idx={idx}
+              isCurrentStep={isCurrentStep}
+              isPastStep={isPastStep}
+              isFutureStep={isFutureStep}
+              currentItemRef={currentItemRef}
+                onViewDetails={() => handleViewDetails(step)}
+            />
+          );
+        })}
+        
+        {steps.length === 0 && (
+          <div className="p-8 text-center text-slate-500">
+            <Zap className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">Нет событий</p>
+            <p className="text-xs mt-1">Запустите симуляцию для просмотра лога</p>
+          </div>
+        )}
+      </div>
+    </div>
 
       {/* Detailed error view modal */}
       <AnimatePresence>
