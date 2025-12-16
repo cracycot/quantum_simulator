@@ -10,6 +10,7 @@ interface StateDisplayProps {
   state: StateVector;
   numQubits: number;
   title?: string;
+  showTitle?: boolean;
   showProbabilities?: boolean;
   showAmplitudes?: boolean;
   threshold?: number;
@@ -19,6 +20,7 @@ export const StateDisplay: React.FC<StateDisplayProps> = ({
   state,
   numQubits,
   title = 'Квантовое состояние',
+  showTitle = true,
   showProbabilities = true,
   showAmplitudes = true,
   threshold = 0.01
@@ -42,10 +44,12 @@ export const StateDisplay: React.FC<StateDisplayProps> = ({
 
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-700 flex items-center gap-2">
-        <Atom className="w-4 h-4 text-cyan-400" />
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
-      </div>
+      {showTitle && (
+        <div className="px-4 py-3 border-b border-slate-700 flex items-center gap-2">
+          <Atom className="w-4 h-4 text-cyan-400" />
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
+        </div>
+      )}
 
       <div className="p-4">
         {/* State vector representation */}

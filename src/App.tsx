@@ -66,9 +66,10 @@ const App: React.FC = () => {
   const [showBlochSpheres, setShowBlochSpheres] = useState(false);
   const [showQBERChart, setShowQBERChart] = useState(true);
   const [showTransformations, setShowTransformations] = useState(false);
+  const [showStateDisplay, setShowStateDisplay] = useState(true);
   const [selectedQubit, setSelectedQubit] = useState(0);
   const [showCorrectionDetails, setShowCorrectionDetails] = useState(false);
-  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(true);
   
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -479,29 +480,30 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* State Display */}
-            {simulator && (
-              <StateDisplay
-                state={simulator.getState().system.state}
-                numQubits={numQubits}
-                title={`Квантовое состояние (${codeType === 'repetition' ? '3 кубита' : '9 кубитов'})`}
-              />
-            )}
-
             {/* Transformation History Section */}
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
+              {simulator && (
+                <TransformationView
+                  steps={simulator.getHistory()}
+                  currentStepIndex={simulator.getCurrentSnapshotIndex()}
+                />
+              )}
+            </div>
+
+            {/* State Display */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
               <button
-                onClick={() => setShowTransformations(!showTransformations)}
+                onClick={() => setShowStateDisplay(!showStateDisplay)}
                 className="w-full px-6 py-4 flex items-center justify-between text-white hover:bg-slate-700/30 transition-colors"
               >
                 <span className="font-semibold flex items-center gap-2">
-                  📜 История трансформаций
+                  ⚛️ Квантовое состояние ({codeType === 'repetition' ? '3 кубита' : '9 кубитов'})
                 </span>
-                {showTransformations ? <ChevronUp /> : <ChevronDown />}
+                {showStateDisplay ? <ChevronUp /> : <ChevronDown />}
               </button>
               
               <AnimatePresence>
-                {showTransformations && simulator && (
+                {showStateDisplay && simulator && (
                   <motion.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
@@ -509,9 +511,10 @@ const App: React.FC = () => {
                     className="overflow-hidden"
                   >
                     <div className="px-6 pb-6">
-                      <TransformationView
-                        steps={simulator.getHistory()}
-                        currentStepIndex={simulator.getCurrentSnapshotIndex()}
+                      <StateDisplay
+                        state={simulator.getState().system.state}
+                        numQubits={numQubits}
+                        showTitle={false}
                       />
                     </div>
                   </motion.div>

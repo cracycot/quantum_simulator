@@ -7,7 +7,48 @@ interface TransformationViewProps {
   currentStepIndex?: number;
 }
 
-const ITEMS_PER_PAGE = 3;
+const ITEMS_PER_PAGE = 1;
+
+// Determine badge type based on effect
+function getBadgeType(step: QuantumStep, transformation: any): string {
+  const effect = transformation.effect;
+  
+  // Map effect to phase badge type
+  switch (effect) {
+    case 'superposition':
+    case 'entanglement':
+      return 'encode'; // INIT phase (green)
+    case 'error':
+      return 'noise'; // NOISE/ERROR phase (red)
+    case 'measurement':
+      return 'measurement'; // MEASUREMENT phase (purple)
+    case 'correction':
+      return 'correction'; // CORRECTION phase (green)
+    default:
+      return step.type; // fallback to step type
+  }
+}
+
+// Determine badge label based on effect
+function getBadgeLabel(step: QuantumStep, transformation: any): string {
+  const effect = transformation.effect;
+  
+  switch (effect) {
+    case 'superposition':
+    case 'entanglement':
+      return 'INIT'; // Initialization phase
+    case 'error':
+      return 'NOISE/ERROR';
+    case 'measurement':
+      return 'MEASUREMENT';
+    case 'correction':
+      return 'CORRECTION';
+    case 'encoding':
+      return 'ENCODE'; // Explicit encoding from palette
+    default:
+      return step.type.toUpperCase();
+  }
+}
 
 export function TransformationView({ steps, currentStepIndex = -1 }: TransformationViewProps) {
   // Фильтруем только шаги с трансформациями
@@ -45,35 +86,69 @@ export function TransformationView({ steps, currentStepIndex = -1 }: Transformat
 
   return (
     <div className="transformation-view">
+      {/* Header with title, counters and navigation */}
       <div className="transformation-header">
-        <h3>📜 История трансформаций</h3>
+        <h3 className="transformation-title">📜 История трансформаций</h3>
         <div className="pagination-info">
-          <span className="step-count">{transformationSteps.length} шагов</span>
           <span className="page-info">
             Стр. {currentPage + 1} / {totalPages}
           </span>
+          {totalPages > 1 && (
+            <>
+              <button
+                onClick={handlePrevPage}
+                disabled={currentPage === 0}
+                className="pagination-btn-inline"
+                title="Предыдущая страница"
+              >
+                ←
+              </button>
+              
+              <div className="pagination-dots-inline">
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i)}
+                    className={`pagination-dot ${i === currentPage ? 'active' : ''}`}
+                    title={`Страница ${i + 1}`}
+                  />
+                ))}
+              </div>
+              
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages - 1}
+                className="pagination-btn-inline"
+                title="Следующая страница"
+              >
+                →
+              </button>
+            </>
+          )}
         </div>
       </div>
 
+      {/* Transformation content */}
       <div className="transformation-list">
         {visibleSteps.map((step, idx) => {
           const t = step.transformation!;
           const globalIdx = startIdx + idx;
           const isActive = globalIdx === currentStepIndex;
-          const stepNumber = steps.indexOf(step) + 1;
+          // Номер среди трансформаций, а не среди всех шагов
+          const stepNumber = globalIdx + 1;
 
           return (
-            <div 
-              key={step.timestamp} 
-              className={`transformation-step ${isActive ? 'active' : ''} effect-${t.effect}`}
-            >
-              {/* Фаза и номер */}
-              <div className="step-header">
-                <span className="step-number">#{stepNumber}</span>
-                <span className={`phase-badge phase-${step.type}`}>
-                  {step.type.toUpperCase()}
-                </span>
-              </div>
+             <div 
+               key={step.timestamp} 
+               className={`transformation-step ${isActive ? 'active' : ''} effect-${t.effect}`}
+             >
+               {/* Фаза и номер */}
+               <div className="step-header">
+                 <span className="step-number">#{stepNumber}</span>
+                 <span className={`phase-badge phase-${getBadgeType(step, t)}`}>
+                   {getBadgeLabel(step, t)}
+                 </span>
+               </div>
 
               {/* Операция */}
               <div className="operation-info">
@@ -113,40 +188,6 @@ export function TransformationView({ steps, currentStepIndex = -1 }: Transformat
           );
         })}
       </div>
-
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="pagination-controls">
-          <button
-            onClick={handlePrevPage}
-            disabled={currentPage === 0}
-            className="pagination-btn"
-            title="Предыдущая страница"
-          >
-            ← Назад
-          </button>
-          
-          <div className="pagination-dots">
-            {Array.from({ length: totalPages }, (_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentPage(i)}
-                className={`pagination-dot ${i === currentPage ? 'active' : ''}`}
-                title={`Страница ${i + 1}`}
-              />
-            ))}
-          </div>
-          
-          <button
-            onClick={handleNextPage}
-            disabled={currentPage === totalPages - 1}
-            className="pagination-btn"
-            title="Следующая страница"
-          >
-            Вперед →
-          </button>
-        </div>
-      )}
     </div>
   );
 }

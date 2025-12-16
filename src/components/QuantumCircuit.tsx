@@ -60,10 +60,12 @@ const getGateColor = (name: string, type: string): string => {
  * Parse steps into circuit gates for visualization
  * Each step from history becomes one column in the circuit
  */
-function parseStepsToGates(steps: QuantumStep[]): CircuitGate[] {
+function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepToColumnMap: Map<number, number> } {
   const gates: CircuitGate[] = [];
+  const stepToColumnMap = new Map<number, number>(); // Маппинг step index -> column index
+  let column = 0; // Счетчик колонок без пропусков
   
-  steps.forEach((step, column) => {
+  steps.forEach((step, stepIdx) => {
     const desc = step.description.toLowerCase();
     
     if (step.operation) {
@@ -78,6 +80,8 @@ function parseStepsToGates(steps: QuantumStep[]): CircuitGate[] {
         type: step.type,
         label: step.description
       });
+      stepToColumnMap.set(stepIdx, column);
+      column++; // Увеличиваем колонку только если добавили гейт
     } else if (step.type === 'measurement') {
       // Measurement step
       let qubits = step.qubitIndex !== undefined ? [step.qubitIndex] : [0];
@@ -90,8 +94,17 @@ function parseStepsToGates(steps: QuantumStep[]): CircuitGate[] {
         type: 'measurement',
         label: step.description
       });
+      stepToColumnMap.set(stepIdx, column);
+      column++; // Увеличиваем колонку только если добавили гейт
     } else {
-      // Other steps (encode, noise, correction, decode, etc.)
+      // Skip encode/decode steps without operations - they're shown as phase labels above
+      // Only show noise, correction, and other non-gate steps that have visual meaning
+      if (step.type === 'encode' || step.type === 'decode') {
+        // Skip these - they're represented by phase labels, не увеличиваем column
+        return;
+      }
+      
+      // Other steps (noise, correction, etc.) that should be shown
       let name = step.type.substring(0, 3).toUpperCase();
       let qubits: number[] = [0];
       
@@ -102,13 +115,7 @@ function parseStepsToGates(steps: QuantumStep[]): CircuitGate[] {
       }
       
       // Determine display name from description
-      if (desc.includes('initialize')) {
-        name = 'INIT';
-      } else if (desc.includes('encoded') || desc.includes('encoding')) {
-        name = 'ENC';
-      } else if (desc.includes('decoded') || desc.includes('decoding')) {
-        name = 'DEC';
-      } else if (desc.includes('x error') || desc.includes('bit-flip')) {
+      if (desc.includes('x error') || desc.includes('bit-flip')) {
         name = 'X!';
       } else if (desc.includes('z error') || desc.includes('phase-flip')) {
         name = 'Z!';
@@ -139,10 +146,12 @@ function parseStepsToGates(steps: QuantumStep[]): CircuitGate[] {
         type: step.type,
         label: step.description
       });
+      stepToColumnMap.set(stepIdx, column);
+      column++; // Увеличиваем колонку только если добавили гейт
     }
   });
   
-  return gates;
+  return { gates, stepToColumnMap };
 }
 
 /**
@@ -367,7 +376,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
       document.removeEventListener('dragend', handleDragEnd);
     };
   }, [isDroppable]);
-  const gates = parseStepsToGates(steps);
+  const { gates, stepToColumnMap } = parseStepsToGates(steps);
   const baseNumColumns = Math.max(gates.length > 0 ? Math.max(...gates.map(g => g.column)) + 1 : 1, 1);
   // Add extra columns for custom gates + space for new gates
   const customGateColumns = customGatePlan.length;
@@ -376,26 +385,27 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
   
   const wireSpacing = 50;
   const columnWidth = 55;
+  const phaseLabelsHeight = 40;
   const padding = { left: 70, right: 40, top: 30, bottom: 30 };
   
   const width = Math.max(padding.left + totalColumns * columnWidth + padding.right, 400);
-  const height = padding.top + (numQubits - 1) * wireSpacing + padding.bottom;
+  const height = phaseLabelsHeight + padding.top + (numQubits - 1) * wireSpacing + padding.bottom;
   
   const getQubitY = (qubit: number) => padding.top + qubit * wireSpacing;
   const getColumnX = (column: number) => padding.left + column * columnWidth + columnWidth / 2;
   
-  // Current step is 1-indexed (1 = first step done), column is 0-indexed
+  // Current step is 1-indexed (1 = first step done), convert to column using mapping
   const currentColumnIndex = currentStep !== undefined && currentStep > 0 
-    ? currentStep - 1 
+    ? (stepToColumnMap.get(currentStep - 1) ?? -1)
     : -1;
   
   // Generate phase labels
-  const phaseLabels = generatePhaseLabels(steps, columnWidth, padding);
+  const phaseLabels = generatePhaseLabels(steps, columnWidth, padding, stepToColumnMap);
   
   return (
     <div 
       className="w-full overflow-x-auto bg-slate-900/50 rounded-xl p-4 relative" 
-      style={{ minHeight: height + 40 }}
+      style={{ minHeight: height }}
       onDragOver={(e) => {
         if (isDroppable) {
           e.preventDefault();
@@ -421,12 +431,12 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
     >
       <svg 
         width={width} 
-        height={height + 40}
-        viewBox={`0 0 ${width} ${height + 40}`}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
         style={{ display: 'block' }}
       >
         {/* Phase labels at the top */}
-        <g transform="translate(0, 0)">
+        <g transform={`translate(0, 0)`}>
           {phaseLabels.map((phase, idx) => (
             <g key={`phase-${phase.name}-${idx}`}>
               <rect
@@ -454,8 +464,8 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
           ))}
         </g>
         
-        {/* Main circuit content - shifted down by 40px */}
-        <g transform="translate(0, 40)">
+        {/* Main circuit content - shifted down by phaseLabelsHeight */}
+        <g transform={`translate(0, ${phaseLabelsHeight})`}>
         {/* Qubit wires and labels */}
         {Array.from({ length: numQubits }, (_, i) => (
           <g key={`wire-${i}`}>
@@ -669,7 +679,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             x={getColumnX(currentColumnIndex) - columnWidth / 2 + 2}
             y={padding.top - 20}
             width={columnWidth - 4}
-            height={height - padding.top - padding.bottom + 40}
+            height={height - padding.top - padding.bottom}
             rx={6}
             fill="rgba(34, 197, 94, 0.1)"
             stroke="#22c55e"
@@ -687,7 +697,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
         <>
           {Array.from({ length: numQubits }, (_, i) => {
             const isHighlighted = draggedOverQubit === i;
-            const zoneTop = 16 + 40 + padding.top + i * wireSpacing - 18; // +40 for phase labels
+            const zoneTop = 16 + phaseLabelsHeight + padding.top + i * wireSpacing - 18;
             const zoneLeft = 16 + padding.left - 20;
             const zoneWidth = width - padding.left - padding.right + 40;
             
@@ -761,13 +771,14 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
 function generatePhaseLabels(
   steps: QuantumStep[], 
   columnWidth: number, 
-  padding: { left: number }
+  padding: { left: number },
+  stepToColumnMap: Map<number, number>
 ): Array<{ name: string; start: number; end: number; color: string; centerX: number; startX: number; endX: number }> {
   const phases: Array<{ name: string; start: number; end: number; color: string }> = [];
   let currentPhase: string | null = null;
-  let phaseStart = 0;
+  let phaseStartColumn: number | null = null;
   
-  steps.forEach((step, idx) => {
+  steps.forEach((step, stepIdx) => {
     let phaseName = '';
     let phaseColor = '#475569';
     
@@ -794,20 +805,24 @@ function generatePhaseLabels(
     // Skip if no phase name
     if (!phaseName) return;
     
+    // Get column for this step (if it has a gate, use that column; otherwise use previous column or 0)
+    const column = stepToColumnMap.get(stepIdx) ?? (phaseStartColumn ?? 0);
+    
     // If this is a new phase
     if (phaseName !== currentPhase) {
       // Close previous phase if exists
-      if (currentPhase !== null && phases.length > 0) {
-        phases[phases.length - 1].end = idx - 1;
+      if (currentPhase !== null && phases.length > 0 && phaseStartColumn !== null) {
+        const prevColumn = stepToColumnMap.get(stepIdx - 1) ?? phaseStartColumn;
+        phases[phases.length - 1].end = prevColumn;
       }
       // Start new phase
       currentPhase = phaseName;
-      phaseStart = idx;
-      phases.push({ name: phaseName, start: idx, end: idx, color: phaseColor });
+      phaseStartColumn = column;
+      phases.push({ name: phaseName, start: column, end: column, color: phaseColor });
     } else {
-      // Continue current phase - extend end
+      // Continue current phase - extend end to current column
       if (phases.length > 0) {
-        phases[phases.length - 1].end = idx;
+        phases[phases.length - 1].end = column;
       }
     }
   });

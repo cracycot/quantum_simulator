@@ -534,6 +534,7 @@ export class QuantumSystem {
 
   /**
    * Generate transformation for non-gate operations
+   * Only creates transformation if state actually changed (except for measurement which always shows)
    */
   private generateStepTransformation(
     type: QuantumStep['type'], 
@@ -541,27 +542,19 @@ export class QuantumSystem {
     stateBefore: StateVector,
     stateAfter: StateVector
   ): StateTransformation | undefined {
+    // Check if state actually changed (fidelity close to 1 means no change)
+    const fidelity = stateBefore.fidelity(stateAfter);
+    // Measurement always creates transformation (to show syndrome), others only if state changed
+    if (type !== 'measurement' && fidelity > 0.9999) {
+      // State didn't change, don't create transformation
+      return undefined;
+    }
+    
     let effect: StateTransformation['effect'] = 'encoding';
     let meaning = description;
     let icon = '📊';
     
     switch (type) {
-      case 'encode':
-        effect = 'encoding';
-        icon = '🔐';
-        if (description.toLowerCase().includes('initialize')) {
-          meaning = 'Инициализация начального состояния';
-        } else {
-          meaning = 'Кодирование логического состояния в физические кубиты';
-        }
-        break;
-        
-      case 'decode':
-        effect = 'decoding';
-        icon = '🔓';
-        meaning = 'Декодирование физических кубитов в логическое состояние';
-        break;
-        
       case 'noise':
         effect = 'error';
         icon = '⚠️';
@@ -571,7 +564,12 @@ export class QuantumSystem {
       case 'measurement':
         effect = 'measurement';
         icon = '📏';
-        meaning = description;
+        // Enhanced meaning for syndrome measurement
+        if (description.includes('Syndrome') || description.includes('syndrome')) {
+          meaning = `${description} — определение позиции ошибки`;
+        } else {
+          meaning = description;
+        }
         break;
         
       case 'correction':
@@ -600,12 +598,20 @@ export class QuantumSystem {
     const stateBefore = this.state.clone();
     const stateAfter = this.state.clone();
     
-    const transformation = this.generateStepTransformation(
-      type, 
-      description, 
-      stateBefore, 
-      stateAfter
-    );
+    // Only create transformations for steps that actually change state or are meaningful
+    // Skip transformations for encode/decode steps without operations (they're just labels)
+    let transformation: StateTransformation | undefined = undefined;
+    
+    if (type === 'noise' || type === 'measurement' || type === 'correction') {
+      // These steps may have meaningful transformations
+      transformation = this.generateStepTransformation(
+        type, 
+        description, 
+        stateBefore, 
+        stateAfter
+      );
+    }
+    // encode/decode steps without operations don't get transformations - they're just phase labels
     
     this.history.push({
       type,
