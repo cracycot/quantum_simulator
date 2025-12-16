@@ -187,6 +187,10 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: pre-line; /* Поддержка переноса строки */
+  line-height: 1.2; /* Улучшенный межстрочный интервал */
+  text-align: center; /* Центрирование текста */
+  display: inline-block; /* Для правильного отображения переноса */
 }
 
 .phase-gate {

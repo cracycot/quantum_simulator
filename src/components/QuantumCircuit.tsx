@@ -385,7 +385,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
   
   const wireSpacing = 50;
   const columnWidth = 55;
-  const phaseLabelsHeight = 40;
+  const phaseLabelsHeight = 50; // Увеличено для поддержки двух строк
   const padding = { left: 70, right: 40, top: 30, bottom: 30 };
   
   const width = Math.max(padding.left + totalColumns * columnWidth + padding.right, 400);
@@ -441,9 +441,9 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             <g key={`phase-${phase.name}-${idx}`}>
               <rect
                 x={phase.startX}
-                y={8}
+                y={6}
                 width={phase.endX - phase.startX}
-                height={24}
+                height={38}
                 fill={`${phase.color}22`}
                 stroke={phase.color}
                 strokeWidth={2}
@@ -451,14 +451,18 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
               />
               <text
                 x={phase.centerX}
-                y={24}
+                y={18}
                 textAnchor="middle"
                 fill={phase.color}
                 fontSize={11}
                 fontWeight="bold"
                 fontFamily="monospace"
               >
-                {phase.name}
+                {phase.name.split('\n').map((line, i) => (
+                  <tspan key={i} x={phase.centerX} dy={i === 0 ? 0 : 14}>
+                    {line}
+                  </tspan>
+                ))}
               </text>
             </g>
           ))}
@@ -785,14 +789,33 @@ function generatePhaseLabels(
     // Determine phase from step type and description
     const desc = step.description.toLowerCase();
     
-    if (step.type === 'encode' && (desc.includes('initialize') || desc.includes('init'))) {
+    // Priority 1: Check if this is an initialization gate (H or CNOT during init/encode)
+    if (step.type === 'gate' && step.isInitialization === true) {
       phaseName = 'INIT';
       phaseColor = '#22c55e';
-    } else if (step.type === 'encode' && !desc.includes('initialize')) {
-      phaseName = 'ENCODE';
-      phaseColor = '#3b82f6';
+    } 
+    // Priority 2: Check if this is a gate operation without isInitialization flag
+    // If it's a gate with superposition/entanglement effect, it's automatic encoding → INIT
+    else if (step.type === 'gate' && step.isInitialization === undefined) {
+      // Gate operations without isInitialization are automatic (CNOT during encodeRepetition)
+      // They should be INIT, not ENCODE
+      phaseName = 'INIT';
+      phaseColor = '#22c55e';
+    }
+    // Priority 3: Check encode log steps
+    else if (step.type === 'encode' && (desc.includes('initialize') || desc.includes('init'))) {
+      phaseName = 'INIT';
+      phaseColor = '#22c55e';
+    } 
+    // Priority 4: ENCODE should only appear if there are explicit gates from palette
+    // For now, we don't show ENCODE phase label - all automatic operations are INIT
+    // ENCODE will only appear if user explicitly adds gates from palette (handled separately)
+    else if (step.type === 'encode' && !desc.includes('initialize')) {
+      // Skip this - don't create ENCODE phase for automatic encoding
+      // ENCODE should only appear for explicit palette gates
+      return; // Skip this step, don't create phase label
     } else if (step.type === 'noise' || step.type === 'gate-error') {
-      phaseName = 'NOISE/ERROR';
+      phaseName = 'NOISE/\nERROR'; // Перенос строки для лучшего отображения
       phaseColor = '#ef4444';
     } else if (step.type === 'measurement') {
       phaseName = 'MEASUREMENT';

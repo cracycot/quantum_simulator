@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { QuantumStep } from '../core/quantum/system';
 import './TransformationView.css';
 
@@ -9,14 +9,21 @@ interface TransformationViewProps {
 
 const ITEMS_PER_PAGE = 1;
 
-// Determine badge type based on effect
+// Determine badge type based on effect and context
 function getBadgeType(step: QuantumStep, transformation: any): string {
   const effect = transformation.effect;
+  
+  // If gate was applied during initialization (not from palette), it's INIT
+  if (step.isInitialization === true) {
+    return 'encode'; // INIT phase (green badge)
+  }
   
   // Map effect to phase badge type
   switch (effect) {
     case 'superposition':
     case 'entanglement':
+      // Automatic encoding operations (CNOT during encodeRepetition) should have isInitialization=true
+      // If not, assume it's automatic → INIT
       return 'encode'; // INIT phase (green)
     case 'error':
       return 'noise'; // NOISE/ERROR phase (red)
@@ -24,19 +31,31 @@ function getBadgeType(step: QuantumStep, transformation: any): string {
       return 'measurement'; // MEASUREMENT phase (purple)
     case 'correction':
       return 'correction'; // CORRECTION phase (green)
+    case 'encoding':
+      return 'encode'; // ENCODE phase (blue) - only for gates from palette
     default:
       return step.type; // fallback to step type
   }
 }
 
-// Determine badge label based on effect
+// Determine badge label based on effect and context
 function getBadgeLabel(step: QuantumStep, transformation: any): string {
   const effect = transformation.effect;
   
+  // Priority 1: If gate was applied during initialization (not from palette), it's INIT
+  if (step.isInitialization === true) {
+    return 'INIT';
+  }
+  
+  // Priority 2: Check effect type
   switch (effect) {
     case 'superposition':
     case 'entanglement':
-      return 'INIT'; // Initialization phase
+      // H and CNOT gates with superposition/entanglement effect are INIT
+      // unless they're explicitly from palette (which would have effect='encoding')
+      // Since isInitialization is not true, but effect is superposition/entanglement,
+      // this means it's automatic encoding (CNOT during encodeRepetition) → INIT
+      return 'INIT';
     case 'error':
       return 'NOISE/ERROR';
     case 'measurement':
@@ -44,7 +63,10 @@ function getBadgeLabel(step: QuantumStep, transformation: any): string {
     case 'correction':
       return 'CORRECTION';
     case 'encoding':
-      return 'ENCODE'; // Explicit encoding from palette
+      // Gates with effect='encoding' are explicitly from palette (X, Y, Z, S, T, Rx, Ry, Rz)
+      // These should be ENCODE only if user added them from palette
+      // But if isInitialization=true, it's already handled above
+      return 'ENCODE';
     default:
       return step.type.toUpperCase();
   }
