@@ -40,6 +40,7 @@ import { SyndromeTable } from './components/SyndromeTable';
 import { QBERChart, QBERIndicator } from './components/QBERChart';
 import { StateDisplay, LogicalStateIndicator } from './components/StateDisplay';
 import { CorrectionDetailsModal } from './components/CorrectionDetailsModal';
+import { TransformationView } from './components/TransformationView';
 
 import './App.css';
 
@@ -64,8 +65,10 @@ const App: React.FC = () => {
   // UI state
   const [showBlochSpheres, setShowBlochSpheres] = useState(false);
   const [showQBERChart, setShowQBERChart] = useState(true);
+  const [showTransformations, setShowTransformations] = useState(false);
   const [selectedQubit, setSelectedQubit] = useState(0);
   const [showCorrectionDetails, setShowCorrectionDetails] = useState(false);
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
   
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -337,46 +340,65 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg shadow-cyan-500/25">
-                <Cpu className="w-6 h-6 text-white" />
+      <header className={`border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50 transition-all duration-300 ${isHeaderCollapsed ? 'border-b-0' : ''}`}>
+        {isHeaderCollapsed ? (
+          <div className="flex justify-end px-2 py-1">
+            <button
+              onClick={() => setIsHeaderCollapsed(false)}
+              className="text-slate-400 hover:text-cyan-400 transition-colors p-1 hover:bg-slate-800 rounded"
+              title="Развернуть шапку"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg shadow-cyan-500/25">
+                  <Cpu className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-white">
+                    QEC Simulator
+                  </h1>
+                  <p className="text-xs text-slate-400">
+                    Квантовая коррекция ошибок
+                  </p>
+                </div>
               </div>
-      <div>
-                <h1 className="text-xl font-bold text-white">
-                  QEC Simulator
-                </h1>
-                <p className="text-xs text-slate-400">
-                  Квантовая коррекция ошибок
-                </p>
+              
+              <div className="flex items-center gap-4">
+                <a
+                  href="#info"
+                  className="text-slate-400 hover:text-white transition-colors flex items-center gap-1 text-sm"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  Справка
+                </a>
+                <a
+                  href="https://github.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-slate-400 hover:text-white transition-colors"
+                >
+                  <Github className="w-5 h-5" />
+                </a>
+                <button
+                  onClick={() => setIsHeaderCollapsed(true)}
+                  className="text-slate-400 hover:text-cyan-400 transition-colors p-1 hover:bg-slate-800 rounded"
+                  title="Свернуть шапку"
+                >
+                  <ChevronUp className="w-5 h-5" />
+                </button>
               </div>
             </div>
-            
-            <div className="flex items-center gap-4">
-              <a
-                href="#info"
-                className="text-slate-400 hover:text-white transition-colors flex items-center gap-1 text-sm"
-              >
-                <BookOpen className="w-4 h-4" />
-                Справка
-              </a>
-              <a
-                href="https://github.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-slate-400 hover:text-white transition-colors"
-              >
-                <Github className="w-5 h-5" />
-        </a>
-      </div>
           </div>
-        </div>
+        )}
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-12 gap-6">
+      <main className="max-w-[1600px] mx-auto px-4 py-4">
+        <div className="grid grid-cols-12 gap-4">
           {/* Left Panel - Controls */}
           <div className="col-span-12 lg:col-span-3 space-y-6">
             <ControlPanel
@@ -427,27 +449,34 @@ const App: React.FC = () => {
           <div className="col-span-12 lg:col-span-6 space-y-6">
             {/* Quantum Circuit */}
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-cyan-400" />
-                  Квантовая схема
-                </h2>
-                <CircuitLegend />
-              </div>
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
+                <Layers className="w-5 h-5 text-cyan-400" />
+                Квантовая схема
+              </h2>
               
-              {simulator && (
-                <QuantumCircuit
-                  numQubits={numQubits}
-                  steps={simulator.getHistory()}
-                  currentStep={currentStep}
-                  qubitLabels={Array.from({ length: numQubits }, (_, i) => `q${i}`)}
-                  isDroppable={activeConfigTab === 'gate-error'}
-                  onGateDrop={handleGateDrop}
-                  pendingTwoQubitGate={pendingTwoQubitGate}
-                  customGatePlan={customGatePlan}
-                  onCustomGateClick={handleCustomGateClick}
-                />
-              )}
+              <div className="flex gap-4">
+                {/* Circuit */}
+                <div className="flex-1 min-w-0">
+                  {simulator && (
+                    <QuantumCircuit
+                      numQubits={numQubits}
+                      steps={simulator.getHistory()}
+                      currentStep={currentStep}
+                      qubitLabels={Array.from({ length: numQubits }, (_, i) => `q${i}`)}
+                      isDroppable={activeConfigTab === 'gate-error'}
+                      onGateDrop={handleGateDrop}
+                      pendingTwoQubitGate={pendingTwoQubitGate}
+                      customGatePlan={customGatePlan}
+                      onCustomGateClick={handleCustomGateClick}
+                    />
+                  )}
+                </div>
+                
+                {/* Legend (Right Side) */}
+                <div className="flex-shrink-0">
+                  <CircuitLegend />
+                </div>
+              </div>
             </div>
 
             {/* State Display */}
@@ -458,6 +487,37 @@ const App: React.FC = () => {
                 title={`Квантовое состояние (${codeType === 'repetition' ? '3 кубита' : '9 кубитов'})`}
               />
             )}
+
+            {/* Transformation History Section */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
+              <button
+                onClick={() => setShowTransformations(!showTransformations)}
+                className="w-full px-6 py-4 flex items-center justify-between text-white hover:bg-slate-700/30 transition-colors"
+              >
+                <span className="font-semibold flex items-center gap-2">
+                  📜 История трансформаций
+                </span>
+                {showTransformations ? <ChevronUp /> : <ChevronDown />}
+              </button>
+              
+              <AnimatePresence>
+                {showTransformations && simulator && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-6 pb-6">
+                      <TransformationView
+                        steps={simulator.getHistory()}
+                        currentStepIndex={simulator.getCurrentSnapshotIndex()}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* Bloch Spheres Section */}
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">

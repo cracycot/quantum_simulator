@@ -389,10 +389,13 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
     ? currentStep - 1 
     : -1;
   
+  // Generate phase labels
+  const phaseLabels = generatePhaseLabels(steps, columnWidth, padding);
+  
   return (
     <div 
       className="w-full overflow-x-auto bg-slate-900/50 rounded-xl p-4 relative" 
-      style={{ minHeight: height + 32 }}
+      style={{ minHeight: height + 40 }}
       onDragOver={(e) => {
         if (isDroppable) {
           e.preventDefault();
@@ -418,10 +421,41 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
     >
       <svg 
         width={width} 
-        height={height}
-        viewBox={`0 0 ${width} ${height}`}
+        height={height + 40}
+        viewBox={`0 0 ${width} ${height + 40}`}
         style={{ display: 'block' }}
       >
+        {/* Phase labels at the top */}
+        <g transform="translate(0, 0)">
+          {phaseLabels.map((phase, idx) => (
+            <g key={`phase-${phase.name}-${idx}`}>
+              <rect
+                x={phase.startX}
+                y={8}
+                width={phase.endX - phase.startX}
+                height={24}
+                fill={`${phase.color}22`}
+                stroke={phase.color}
+                strokeWidth={2}
+                rx={4}
+              />
+              <text
+                x={phase.centerX}
+                y={24}
+                textAnchor="middle"
+                fill={phase.color}
+                fontSize={11}
+                fontWeight="bold"
+                fontFamily="monospace"
+              >
+                {phase.name}
+              </text>
+            </g>
+          ))}
+        </g>
+        
+        {/* Main circuit content - shifted down by 40px */}
+        <g transform="translate(0, 40)">
         {/* Qubit wires and labels */}
         {Array.from({ length: numQubits }, (_, i) => (
           <g key={`wire-${i}`}>
@@ -476,35 +510,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
           </g>
         ))}
         
-        {/* Column separators for phases */}
-        {steps.map((step, idx) => {
-          if (step.type === 'encode' || step.type === 'noise' || step.type === 'correction') {
-            return (
-              <g key={`phase-${idx}`}>
-                <line
-                  x1={getColumnX(idx) - columnWidth / 2}
-                  y1={padding.top - 20}
-                  x2={getColumnX(idx) - columnWidth / 2}
-                  y2={height - padding.bottom + 20}
-                  stroke="#334155"
-                  strokeWidth={1}
-                  strokeDasharray="4,4"
-                />
-                <text
-                  x={getColumnX(idx)}
-                  y={padding.top - 25}
-                  textAnchor="middle"
-                  fill="#64748b"
-                  fontSize={10}
-                  fontFamily="sans-serif"
-                >
-                  {step.type.toUpperCase()}
-                </text>
-              </g>
-            );
-          }
-          return null;
-        })}
+        {/* Column separators removed - using PhaseLabels instead */}
         
         {/* Custom gates from plan - always show when there are custom gates */}
         {customGatePlan.map((customGate, idx) => {
@@ -673,6 +679,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             transition={{ duration: 0.3 }}
           />
         )}
+        </g>
       </svg>
       
       {/* Droppable zones - visible and interactive only when dragging or in drop mode */}
@@ -680,7 +687,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
         <>
           {Array.from({ length: numQubits }, (_, i) => {
             const isHighlighted = draggedOverQubit === i;
-            const zoneTop = 16 + padding.top + i * wireSpacing - 18;
+            const zoneTop = 16 + 40 + padding.top + i * wireSpacing - 18; // +40 for phase labels
             const zoneLeft = 16 + padding.left - 20;
             const zoneWidth = width - padding.left - padding.right + 40;
             
@@ -749,7 +756,122 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
 };
 
 /**
- * Compact step legend
+ * Helper function to generate phase labels data
+ */
+function generatePhaseLabels(
+  steps: QuantumStep[], 
+  columnWidth: number, 
+  padding: { left: number }
+): Array<{ name: string; start: number; end: number; color: string; centerX: number; startX: number; endX: number }> {
+  const phases: Array<{ name: string; start: number; end: number; color: string }> = [];
+  let currentPhase: string | null = null;
+  let phaseStart = 0;
+  
+  steps.forEach((step, idx) => {
+    let phaseName = '';
+    let phaseColor = '#475569';
+    
+    // Determine phase from step type and description
+    const desc = step.description.toLowerCase();
+    
+    if (step.type === 'encode' && (desc.includes('initialize') || desc.includes('init'))) {
+      phaseName = 'INIT';
+      phaseColor = '#22c55e';
+    } else if (step.type === 'encode' && !desc.includes('initialize')) {
+      phaseName = 'ENCODE';
+      phaseColor = '#3b82f6';
+    } else if (step.type === 'noise' || step.type === 'gate-error') {
+      phaseName = 'NOISE/ERROR';
+      phaseColor = '#ef4444';
+    } else if (step.type === 'measurement') {
+      phaseName = 'MEASUREMENT';
+      phaseColor = '#a855f7';
+    } else if (step.type === 'correction') {
+      phaseName = 'CORRECTION';
+      phaseColor = '#10b981';
+    }
+    
+    // Skip if no phase name
+    if (!phaseName) return;
+    
+    // If this is a new phase
+    if (phaseName !== currentPhase) {
+      // Close previous phase if exists
+      if (currentPhase !== null && phases.length > 0) {
+        phases[phases.length - 1].end = idx - 1;
+      }
+      // Start new phase
+      currentPhase = phaseName;
+      phaseStart = idx;
+      phases.push({ name: phaseName, start: idx, end: idx, color: phaseColor });
+    } else {
+      // Continue current phase - extend end
+      if (phases.length > 0) {
+        phases[phases.length - 1].end = idx;
+      }
+    }
+  });
+  
+  const getColumnX = (column: number) => padding.left + column * columnWidth + columnWidth / 2;
+  
+  return phases.map((phase, idx) => {
+    // Add gap between phases to prevent overlapping
+    const leftMargin = idx > 0 ? 5 : 0; // 5px gap on the left (except first)
+    const rightMargin = idx < phases.length - 1 ? 5 : 0; // 5px gap on the right (except last)
+    
+    const startX = getColumnX(phase.start) - 30 + leftMargin;
+    const endX = getColumnX(phase.end) + 30 - rightMargin;
+    const centerX = (startX + endX) / 2;
+    return { ...phase, startX, endX, centerX };
+  });
+}
+
+/**
+ * Phase/Stage labels component for export (not used in main circuit now)
+ */
+export const PhaseLabels: React.FC<{
+  steps: QuantumStep[];
+  width: number;
+  columnWidth: number;
+  padding: { left: number; right: number };
+}> = ({ steps, width, columnWidth, padding }) => {
+  const phases = generatePhaseLabels(steps, columnWidth, padding);
+  
+  return (
+    <div className="absolute top-0 left-0 right-0" style={{ height: '40px', pointerEvents: 'none' }}>
+      <svg width={width} height={40}>
+        {phases.map((phase, idx) => (
+          <g key={`${phase.name}-${idx}`}>
+            <rect
+              x={phase.startX}
+              y={8}
+              width={phase.endX - phase.startX}
+              height={24}
+              fill={`${phase.color}22`}
+              stroke={phase.color}
+              strokeWidth={2}
+              rx={4}
+            />
+            <text
+              x={phase.centerX}
+              y={24}
+              textAnchor="middle"
+              fill={phase.color}
+              fontSize={11}
+              fontWeight="bold"
+              fontFamily="monospace"
+            >
+              {phase.name}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+};
+
+/**
+ * Vertical legend (for sidebar)
  */
 export const CircuitLegend: React.FC = () => {
   const items = [
@@ -765,14 +887,14 @@ export const CircuitLegend: React.FC = () => {
   ];
   
   return (
-    <div className="flex flex-wrap gap-3 p-2 bg-slate-800/50 rounded-lg">
+    <div className="flex flex-col gap-2 p-3 bg-slate-800/50 rounded-lg">
       {items.map(item => (
-        <div key={item.label} className="flex items-center gap-1.5">
+        <div key={item.label} className="flex items-center gap-2">
           <div 
-            className="w-3 h-3 rounded"
+            className="w-4 h-4 rounded flex-shrink-0"
             style={{ backgroundColor: item.color }}
           />
-          <span className="text-xs text-slate-400">{item.label}</span>
+          <span className="text-xs text-slate-300 whitespace-nowrap">{item.label}</span>
         </div>
       ))}
     </div>

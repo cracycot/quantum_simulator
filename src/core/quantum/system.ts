@@ -35,6 +35,19 @@ export interface CorrectionDetails {
   }>;
 }
 
+export interface StateTransformation {
+  // Упрощенное состояние ДО
+  simplifiedBefore: string;
+  // Упрощенное состояние ПОСЛЕ
+  simplifiedAfter: string;
+  // Физический смысл операции
+  physicalMeaning: string;
+  // Тип эффекта
+  effect: 'superposition' | 'entanglement' | 'error' | 'correction' | 'measurement' | 'encoding' | 'decoding';
+  // Иконка для визуализации
+  icon: string;
+}
+
 export interface QuantumStep {
   type: 'gate' | 'measurement' | 'noise' | 'encode' | 'decode' | 'correction' | 'gate-error';
   operation?: GateOperation;
@@ -49,6 +62,8 @@ export interface QuantumStep {
   latex?: string; // General LaTeX description
   // Extended fields for correction
   correctionDetails?: CorrectionDetails;
+  // Transformation details for educational view
+  transformation?: StateTransformation;
 }
 
 export interface SimulationLog {
@@ -118,6 +133,7 @@ export class QuantumSystem {
    */
   initializeLogicalOne(): void {
     this.state = new StateVector(this.numQubits);
+    this.logStep('encode', 'Initialize to |0...0⟩');
     this.applyGate({ name: 'X', qubits: [0] });
     this.logStep('encode', 'Initialize to |1⟩ on data qubit');
   }
@@ -127,6 +143,7 @@ export class QuantumSystem {
    */
   initializeLogicalPlus(): void {
     this.state = new StateVector(this.numQubits);
+    this.logStep('encode', 'Initialize to |0...0⟩');
     this.applyGate({ name: 'H', qubits: [0] });
     this.logStep('encode', 'Initialize to |+⟩ on data qubit');
   }
@@ -136,6 +153,7 @@ export class QuantumSystem {
    */
   initializeLogicalMinus(): void {
     this.state = new StateVector(this.numQubits);
+    this.logStep('encode', 'Initialize to |0...0⟩');
     this.applyGate({ name: 'X', qubits: [0] });
     this.applyGate({ name: 'H', qubits: [0] });
     this.logStep('encode', 'Initialize to |−⟩ on data qubit');
@@ -263,11 +281,145 @@ export class QuantumSystem {
   }
 
   /**
+   * Generate simplified state representation
+   */
+  private simplifyState(state: StateVector, maxTerms: number = 4): string {
+    const significant: Array<{ basis: string; coeff: number; phase: number }> = [];
+    
+    for (let i = 0; i < state.dimension; i++) {
+      const amp = state.amplitudes[i];
+      const prob = amp.absSquared();
+      
+      if (prob > 0.001) {
+        const basis = i.toString(2).padStart(state.numQubits, '0');
+        const coeff = amp.abs();
+        const phase = Math.atan2(amp.im, amp.re);
+        significant.push({ basis, coeff, phase });
+      }
+    }
+    
+    // Sort by coefficient (descending)
+    significant.sort((a, b) => b.coeff - a.coeff);
+    
+    // Take top terms
+    const terms = significant.slice(0, maxTerms).map(({ basis, coeff, phase }) => {
+      let coeffStr = coeff.toFixed(4);
+      
+      // Special cases
+      if (Math.abs(coeff - 1.0) < 0.01) coeffStr = '';
+      else if (Math.abs(coeff - 0.7071) < 0.01) coeffStr = '1/√2';
+      else if (Math.abs(coeff - 0.5) < 0.01) coeffStr = '1/2';
+      
+      // Phase
+      let phaseStr = '';
+      if (Math.abs(phase) > 0.1 && Math.abs(phase - Math.PI) > 0.1) {
+        phaseStr = phase > 0 ? 'e^(iφ)' : 'e^(-iφ)';
+      } else if (Math.abs(phase - Math.PI) < 0.1) {
+        phaseStr = '-';
+      }
+      
+      return `${phaseStr}${coeffStr}|${basis}⟩`.replace(/^-?1/, phaseStr || '');
+    });
+    
+    if (significant.length > maxTerms) {
+      terms.push('...');
+    }
+    
+    return terms.join(' + ').replace(/\+ -/g, '- ');
+  }
+
+  /**
+   * Generate transformation details for educational view
+   */
+  private generateTransformation(op: GateOperation, stateBefore: StateVector, stateAfter: StateVector): StateTransformation {
+    let effect: StateTransformation['effect'] = 'encoding';
+    let meaning = '';
+    let icon = '📊';
+    
+    const qubits = op.qubits;
+    const qStr = qubits.map(q => `q${q}`).join(',');
+    
+    switch (op.name) {
+      case 'H':
+        effect = 'superposition';
+        meaning = `Создана суперпозиция на ${qStr}`;
+        icon = '🌀';
+        break;
+        
+      case 'CNOT':
+        effect = 'entanglement';
+        meaning = `Создана запутанность между q${qubits[0]} и q${qubits[1]}`;
+        icon = '🔗';
+        break;
+        
+      case 'CZ':
+        effect = 'entanglement';
+        meaning = `Применен контролируемый Z между q${qubits[0]} и q${qubits[1]}`;
+        icon = '🔗';
+        break;
+        
+      case 'SWAP':
+        effect = 'encoding';
+        meaning = `Обмен состояниями q${qubits[0]} ↔ q${qubits[1]}`;
+        icon = '🔄';
+        break;
+        
+      case 'X':
+      case 'Y':
+      case 'Z':
+        if (op.label?.includes('noise') || op.label?.includes('Noise')) {
+          effect = 'error';
+          meaning = `Внесена ${op.name}-ошибка на ${qStr}`;
+          icon = '⚠️';
+        } else if (op.label?.includes('correction') || op.label?.includes('Correction')) {
+          effect = 'correction';
+          meaning = `Применена ${op.name}-коррекция на ${qStr}`;
+          icon = '✅';
+        } else {
+          effect = 'encoding';
+          meaning = `Применен ${op.name}-гейт на ${qStr}`;
+          icon = '🔴🔵🟣'[['X', 'Z', 'Y'].indexOf(op.name)] || '🔴';
+        }
+        break;
+        
+      case 'S':
+      case 'T':
+        effect = 'encoding';
+        meaning = `Применен фазовый гейт ${op.name} на ${qStr}`;
+        icon = '🔵';
+        break;
+        
+      case 'Rx':
+      case 'Ry':
+      case 'Rz':
+        effect = 'encoding';
+        const angle = op.params?.[0] || 0;
+        meaning = `Поворот на ${(angle * 180 / Math.PI).toFixed(1)}° вокруг оси ${op.name[1]} на ${qStr}`;
+        icon = '🔄';
+        break;
+        
+      default:
+        effect = 'encoding';
+        meaning = `Применена операция ${op.name} на ${qStr}`;
+        icon = '📊';
+    }
+    
+    return {
+      simplifiedBefore: this.simplifyState(stateBefore),
+      simplifiedAfter: this.simplifyState(stateAfter),
+      physicalMeaning: meaning,
+      effect,
+      icon
+    };
+  }
+
+  /**
    * Apply a quantum gate
    */
   applyGate(op: GateOperation): void {
     const stateBefore = this.state.clone();
     applyGateInternal(this.state, op);
+    const stateAfter = this.state.clone();
     
     const qubitsStr = op.qubits.map(q => this.qubits[q]?.label || `q${q}`).join(', ');
     const description = `Apply ${op.label || op.name} to ${qubitsStr}`;
@@ -275,14 +427,18 @@ export class QuantumSystem {
     // Generate LaTeX for the gate operation
     const latex = this.generateGateLatex(op);
     
+    // Generate transformation details
+    const transformation = this.generateTransformation(op, stateBefore, stateAfter);
+    
     this.history.push({
       type: 'gate',
       operation: op,
       description,
       stateBefore,
-      stateAfter: this.state.clone(),
+      stateAfter,
       timestamp: this.stepCounter++,
-      latex
+      latex,
+      transformation
     });
 
     this.applyGateErrorIfNeeded(op.qubits, op.name);
@@ -321,14 +477,24 @@ export class QuantumSystem {
     
     for (const op of ops) {
       applyGateInternal(this.state, op);
+      // Apply gate errors after each gate if configured
+      this.applyGateErrorIfNeeded(op.qubits, op.name);
     }
+    
+    const stateAfter = this.state.clone();
+    
+    // Generate transformation
+    const transformation = type === 'gate' && ops.length > 0
+      ? this.generateTransformation(ops[0], stateBefore, stateAfter)
+      : this.generateStepTransformation(type, description, stateBefore, stateAfter);
     
     this.history.push({
       type,
       description,
       stateBefore,
-      stateAfter: this.state.clone(),
-      timestamp: this.stepCounter++
+      stateAfter,
+      timestamp: this.stepCounter++,
+      transformation
     });
   }
 
@@ -338,15 +504,20 @@ export class QuantumSystem {
   measureQubit(qubitIndex: number): number {
     const stateBefore = this.state.clone();
     const result = this.state.measureQubit(qubitIndex);
+    const stateAfter = this.state.clone();
+    const description = `Measure ${this.qubits[qubitIndex]?.label || `q${qubitIndex}`}: result = ${result}`;
+    
+    const transformation = this.generateStepTransformation('measurement', description, stateBefore, stateAfter);
     
     this.history.push({
       type: 'measurement',
-      description: `Measure ${this.qubits[qubitIndex]?.label || `q${qubitIndex}`}: result = ${result}`,
+      description,
       stateBefore,
-      stateAfter: this.state.clone(),
+      stateAfter,
       measurementResult: result,
       qubitIndex,
-      timestamp: this.stepCounter++
+      timestamp: this.stepCounter++,
+      transformation
     });
     
     return result;
@@ -362,15 +533,87 @@ export class QuantumSystem {
   }
 
   /**
+   * Generate transformation for non-gate operations
+   */
+  private generateStepTransformation(
+    type: QuantumStep['type'], 
+    description: string,
+    stateBefore: StateVector,
+    stateAfter: StateVector
+  ): StateTransformation | undefined {
+    let effect: StateTransformation['effect'] = 'encoding';
+    let meaning = description;
+    let icon = '📊';
+    
+    switch (type) {
+      case 'encode':
+        effect = 'encoding';
+        icon = '🔐';
+        if (description.toLowerCase().includes('initialize')) {
+          meaning = 'Инициализация начального состояния';
+        } else {
+          meaning = 'Кодирование логического состояния в физические кубиты';
+        }
+        break;
+        
+      case 'decode':
+        effect = 'decoding';
+        icon = '🔓';
+        meaning = 'Декодирование физических кубитов в логическое состояние';
+        break;
+        
+      case 'noise':
+        effect = 'error';
+        icon = '⚠️';
+        meaning = description;
+        break;
+        
+      case 'measurement':
+        effect = 'measurement';
+        icon = '📏';
+        meaning = description;
+        break;
+        
+      case 'correction':
+        effect = 'correction';
+        icon = '✅';
+        meaning = description;
+        break;
+        
+      default:
+        return undefined;
+    }
+    
+    return {
+      simplifiedBefore: this.simplifyState(stateBefore),
+      simplifiedAfter: this.simplifyState(stateAfter),
+      physicalMeaning: meaning,
+      effect,
+      icon
+    };
+  }
+
+  /**
    * Log a custom step
    */
   logStep(type: QuantumStep['type'], description: string): void {
+    const stateBefore = this.state.clone();
+    const stateAfter = this.state.clone();
+    
+    const transformation = this.generateStepTransformation(
+      type, 
+      description, 
+      stateBefore, 
+      stateAfter
+    );
+    
     this.history.push({
       type,
       description,
-      stateBefore: this.state.clone(),
-      stateAfter: this.state.clone(),
-      timestamp: this.stepCounter++
+      stateBefore,
+      stateAfter,
+      timestamp: this.stepCounter++,
+      transformation
     });
   }
 
