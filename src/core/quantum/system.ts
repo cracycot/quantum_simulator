@@ -125,7 +125,40 @@ export class QuantumSystem {
    */
   initializeLogicalZero(): void {
     this.state = new StateVector(this.numQubits);
-    this.logStep('encode', 'Initialize to |0...0⟩');
+    
+    console.log('[QuantumSystem] initializeLogicalZero, numQubits:', this.numQubits);
+    
+    // For 3-qubit repetition code
+    if (this.numQubits === 3) {
+      console.log('[QuantumSystem] Applying H + 2 CNOTs for 3-qubit code');
+      // Step 1: Apply Hadamard to create superposition |0⟩→|+⟩
+      this.applyGatesWithDescription([
+        { name: 'H', qubits: [0], label: 'H₀' }
+      ], '🌀 Hadamard на q₀: создание суперпозиции\n|0⟩ → |+⟩ = (|0⟩+|1⟩)/√2', 'encode');
+      
+      // Step 2: Apply 2 CNOTs for entanglement |+00⟩ → (|000⟩+|111⟩)/√2
+      this.applyGatesWithDescription([
+        { name: 'CNOT', qubits: [0, 1], label: 'CNOT₀₁' },
+        { name: 'CNOT', qubits: [0, 2], label: 'CNOT₀₂' }
+      ], '🔗 Связывание кубитов (2 CNOT)\nq₀→q₁ и q₀→q₂: создание запутанного состояния\n(|000⟩+|111⟩)/√2', 'encode');
+      console.log('[QuantumSystem] After H + CNOTs, history length:', this.history.length);
+    }
+    
+    // For Shor code (9 qubits), apply Hadamard and 2 CNOTs immediately
+    if (this.numQubits === 9) {
+      console.log('[QuantumSystem] Applying H + 2 CNOTs for 9-qubit code');
+      // Step 1: Apply Hadamard to create superposition |0⟩→|+⟩
+      this.applyGatesWithDescription([
+        { name: 'H', qubits: [0], label: 'H₀' }
+      ], '🌀 Hadamard на q₀: создание суперпозиции\n|0⟩ → |+⟩ = (|0⟩+|1⟩)/√2\nЗащита от фазовых ошибок', 'encode');
+      
+      // Step 2: Distribute state across blocks (2 CNOTs)
+      this.applyGatesWithDescription([
+        { name: 'CNOT', qubits: [0, 3], label: 'CNOT₀₃' },
+        { name: 'CNOT', qubits: [0, 6], label: 'CNOT₀₆' }
+      ], '📡 Распределение между блоками (2 CNOT)\nq₀→q₃ и q₀→q₆: создаём связь между лидерами блоков\n|+⟩ → |+++⟩ (лидеры)', 'encode');
+      console.log('[QuantumSystem] After H + CNOTs, history length:', this.history.length);
+    }
   }
 
   /**
@@ -133,31 +166,40 @@ export class QuantumSystem {
    */
   initializeLogicalOne(): void {
     this.state = new StateVector(this.numQubits);
-    this.logStep('encode', 'Initialize to |0...0⟩');
-    this.applyGate({ name: 'X', qubits: [0] });
-    this.logStep('encode', 'Initialize to |1⟩ on data qubit');
+    // Apply X to first qubit to get |1⟩
+    this.applyGatesWithDescription([
+      { name: 'X', qubits: [0], label: 'X₀' }
+    ], '🔴 X на q₀: переход в |1⟩', 'encode');
+    
+    // For 3-qubit repetition code
+    if (this.numQubits === 3) {
+      // Step 1: Apply Hadamard to create superposition |1⟩→|−⟩
+      this.applyGatesWithDescription([
+        { name: 'H', qubits: [0], label: 'H₀' }
+      ], '🌀 Hadamard на q₀ после X\n|1⟩ → |−⟩ = (|0⟩−|1⟩)/√2', 'encode');
+      
+      // Step 2: Apply 2 CNOTs for entanglement
+      this.applyGatesWithDescription([
+        { name: 'CNOT', qubits: [0, 1], label: 'CNOT₀₁' },
+        { name: 'CNOT', qubits: [0, 2], label: 'CNOT₀₂' }
+      ], '🔗 Связывание кубитов (2 CNOT)\n|−⟩ → (|000⟩−|111⟩)/√2', 'encode');
+    }
+    
+    // For Shor code (9 qubits), apply Hadamard and 2 CNOTs immediately
+    if (this.numQubits === 9) {
+      // Step 1: Apply Hadamard to create superposition |1⟩→|−⟩
+      this.applyGatesWithDescription([
+        { name: 'H', qubits: [0], label: 'H₀' }
+      ], '🌀 Hadamard на q₀ после X\n|1⟩ → |−⟩ = (|0⟩−|1⟩)/√2', 'encode');
+      
+      // Step 2: Distribute state across blocks (2 CNOTs)
+      this.applyGatesWithDescription([
+        { name: 'CNOT', qubits: [0, 3], label: 'CNOT₀₃' },
+        { name: 'CNOT', qubits: [0, 6], label: 'CNOT₀₆' }
+      ], '📡 Распределение между блоками (2 CNOT)\n|−⟩ → |−−−⟩ (лидеры)', 'encode');
+    }
   }
 
-  /**
-   * Initialize logical |+⟩ = (|0⟩ + |1⟩)/√2
-   */
-  initializeLogicalPlus(): void {
-    this.state = new StateVector(this.numQubits);
-    this.logStep('encode', 'Initialize to |0...0⟩');
-    this.applyGate({ name: 'H', qubits: [0] });
-    this.logStep('encode', 'Initialize to |+⟩ on data qubit');
-  }
-
-  /**
-   * Initialize logical |−⟩ = (|0⟩ - |1⟩)/√2
-   */
-  initializeLogicalMinus(): void {
-    this.state = new StateVector(this.numQubits);
-    this.logStep('encode', 'Initialize to |0...0⟩');
-    this.applyGate({ name: 'X', qubits: [0] });
-    this.applyGate({ name: 'H', qubits: [0] });
-    this.logStep('encode', 'Initialize to |−⟩ on data qubit');
-  }
 
   /**
    * Update gate error configuration
@@ -259,10 +301,23 @@ export class QuantumSystem {
       const gateName = appliedGateName || 'Gate';
       const latex = this.generateGateErrorLatex(gateName, errorType, q);
 
+      // Generate detailed error transformation
+      const errorTransformation: StateTransformation = {
+        simplifiedBefore: this.simplifyState(stateBefore),
+        simplifiedAfter: this.simplifyState(this.state.clone()),
+        physicalMeaning: `⚠️ Ошибка гейта: ${errorType}-ошибка на q${q} после применения ${gateName}\n` +
+          `Вероятность: ${(probability * 100).toFixed(1)}%\n` +
+          `Эффект: ${errorType === 'X' ? 'переворот бита |0⟩↔|1⟩' : 
+                     errorType === 'Z' ? 'переворот фазы |1⟩→-|1⟩' : 
+                     'комбинированная ошибка Y=iXZ'}`,
+        effect: 'error',
+        icon: '⚠️'
+      };
+
       this.history.push({
         type: 'gate-error',
         operation: errorOp,
-        description: `Gate Error: ${errorType} на q${q} после гейта ${gateName}`,
+        description: `⚠️ Ошибка гейта: ${errorType} на q${q} после ${gateName} (p=${(probability * 100).toFixed(1)}%)`,
         stateBefore,
         stateAfter: this.state.clone(),
         timestamp: this.stepCounter++,
@@ -275,7 +330,8 @@ export class QuantumSystem {
           probability,
           latexBefore: latex.before,
           latexAfter: latex.after
-        }
+        },
+        transformation: errorTransformation
       });
     }
   }
@@ -471,31 +527,39 @@ export class QuantumSystem {
 
   /**
    * Apply multiple gates as a single step with custom description
+   * Each gate is recorded separately so it shows on the circuit
    */
   applyGatesWithDescription(ops: GateOperation[], description: string, type: QuantumStep['type'] = 'gate'): void {
-    const stateBefore = this.state.clone();
+    console.log('[QuantumSystem] applyGatesWithDescription called with', ops.length, 'gates, type:', type, 'description:', description);
     
+    // Apply each gate separately to show them all on the circuit
     for (const op of ops) {
+      console.log('[QuantumSystem] Applying gate:', op.name, 'to qubits:', op.qubits, 'label:', op.label);
+      
+      const stateBefore = this.state.clone();
       applyGateInternal(this.state, op);
+      const stateAfter = this.state.clone();
+      
+      // Generate transformation
+      const transformation = type === 'gate' || type === 'encode'
+        ? this.generateTransformation(op, stateBefore, stateAfter)
+        : this.generateStepTransformation(type, description, stateBefore, stateAfter);
+      
+      this.history.push({
+        type,
+        operation: op,
+        description: `${op.label || op.name}`,
+        stateBefore,
+        stateAfter,
+        timestamp: this.stepCounter++,
+        transformation
+      });
+      
+      console.log('[QuantumSystem] Added to history, new length:', this.history.length);
+      
       // Apply gate errors after each gate if configured
       this.applyGateErrorIfNeeded(op.qubits, op.name);
     }
-    
-    const stateAfter = this.state.clone();
-    
-    // Generate transformation
-    const transformation = type === 'gate' && ops.length > 0
-      ? this.generateTransformation(ops[0], stateBefore, stateAfter)
-      : this.generateStepTransformation(type, description, stateBefore, stateAfter);
-    
-    this.history.push({
-      type,
-      description,
-      stateBefore,
-      stateAfter,
-      timestamp: this.stepCounter++,
-      transformation
-    });
   }
 
   /**

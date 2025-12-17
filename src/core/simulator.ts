@@ -29,7 +29,7 @@ import type { GateErrorConfig } from './noise/gateErrors';
 import type { CustomGateStep } from '../types/gatePlan';
 
 export type CodeType = 'repetition' | 'shor';
-export type LogicalState = 'zero' | 'one' | 'plus' | 'minus';
+export type LogicalState = 'zero' | 'one';
 
 export interface SimulatorConfig {
   codeType: CodeType;
@@ -141,12 +141,6 @@ export class QECSimulator {
       case 'one':
         system.initializeLogicalOne();
         break;
-      case 'plus':
-        system.initializeLogicalPlus();
-        break;
-      case 'minus':
-        system.initializeLogicalMinus();
-        break;
     }
     
     this.state.phase = 'init';
@@ -235,7 +229,11 @@ export class QECSimulator {
   correct(): number[] {
     const { system, config, syndrome, noiseEvents } = this.state;
     let correctedQubits: number[] = [];
-    const appliedErrors = noiseEvents.filter(e => e.applied);
+    
+    // Count ALL errors: gate errors + noise errors
+    const gateErrors = system.history.filter(step => step.type === 'gate-error');
+    const appliedNoiseErrors = noiseEvents.filter(e => e.applied);
+    const totalErrors = gateErrors.length + appliedNoiseErrors.length;
     
     if (config.codeType === 'repetition') {
       const result = correctErrorRepetition(system, syndrome as [number, number]);
@@ -244,13 +242,13 @@ export class QECSimulator {
       }
       
       // Check for errors exceeding correction capability
-      if (appliedErrors.length >= 2) {
+      if (totalErrors >= 2) {
         if (syndrome[0] === 0 && syndrome[1] === 0) {
           // 3 errors: all qubits flipped, looks like valid codeword
-          system.logStep('correction', `⚠️ Логическая ошибка: ${appliedErrors.length} ошибок вызвали необнаруживаемый переход состояния`);
+          system.logStep('correction', `⚠️ Логическая ошибка: ${totalErrors} ошибок (${gateErrors.length} gate + ${appliedNoiseErrors.length} noise) вызвали необнаруживаемый переход состояния`);
         } else {
           // 2 errors: syndrome points to wrong qubit, correction makes it worse
-          system.logStep('correction', `⚠️ Неправильная коррекция: ${appliedErrors.length} ошибок превышают возможности кода (исправляется только 1 ошибка)`);
+          system.logStep('correction', `⚠️ Неправильная коррекция: ${totalErrors} ошибок (${gateErrors.length} gate + ${appliedNoiseErrors.length} noise) превышают возможности кода (исправляется только 1 ошибка)`);
         }
       } else if (correctedQubits.length === 0) {
         system.logStep('correction', 'Ошибок не обнаружено - коррекция не требуется');
@@ -261,8 +259,8 @@ export class QECSimulator {
       correctedQubits = [...result.bitCorrected, ...result.phaseCorrected];
       
       // Check for Shor code correction limits
-      if (appliedErrors.length >= 2) {
-        system.logStep('correction', `⚠️ ${appliedErrors.length} ошибок могут превышать возможности коррекции`);
+      if (totalErrors >= 2) {
+        system.logStep('correction', `⚠️ ${totalErrors} ошибок (${gateErrors.length} gate + ${appliedNoiseErrors.length} noise) могут превышать возможности коррекции`);
       }
     }
     
@@ -468,15 +466,11 @@ export class QECSimulator {
       switch (config.initialState) {
         case 'zero': return getLogicalZeroState();
         case 'one': return getLogicalOneState();
-        case 'plus': return getLogicalPlusState();
-        case 'minus': return getLogicalMinusState();
       }
     } else {
       switch (config.initialState) {
         case 'zero': return getShorLogicalZeroState();
         case 'one': return getShorLogicalOneState();
-        // Plus and minus for Shor code would need additional implementation
-        default: return getShorLogicalZeroState();
       }
     }
   }

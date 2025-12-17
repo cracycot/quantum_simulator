@@ -21,10 +21,6 @@ interface ControlPanelProps {
   codeType: CodeType;
   onCodeTypeChange: (type: CodeType) => void;
   
-  // Initial state
-  initialState: LogicalState;
-  onInitialStateChange: (state: LogicalState) => void;
-  
   // Noise settings
   noiseType: NoiseType;
   onNoiseTypeChange: (type: NoiseType) => void;
@@ -83,8 +79,6 @@ const phaseColors: Record<SimulationPhase, string> = {
 export const ControlPanel: React.FC<ControlPanelProps> = ({
   codeType,
   onCodeTypeChange,
-  initialState,
-  onInitialStateChange,
   noiseType,
   onNoiseTypeChange,
   errorCount,
@@ -166,29 +160,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             <div className="text-sm">9-кубитный</div>
             <div className="text-xs opacity-70">Shor Code</div>
           </button>
-        </div>
-      </div>
-
-      {/* Initial State */}
-      <div className="space-y-2">
-        <label className="text-sm text-slate-400 font-medium">Начальное состояние</label>
-        <div className="grid grid-cols-4 gap-2">
-          {(['zero', 'one', 'plus', 'minus'] as LogicalState[]).map((state) => (
-            <button
-              key={state}
-              onClick={() => onInitialStateChange(state)}
-              className={`px-3 py-2 rounded-lg font-mono transition-all ${
-                initialState === state
-                  ? 'bg-emerald-500 text-white'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
-            >
-              {state === 'zero' && '|0⟩'}
-              {state === 'one' && '|1⟩'}
-              {state === 'plus' && '|+⟩'}
-              {state === 'minus' && '|−⟩'}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -277,7 +248,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             {/* Палитра гейтов (draggable) */}
             <div className="space-y-3">
               <div className="text-sm text-slate-300 font-medium">Палитра гейтов</div>
-              <p className="text-xs text-slate-500">Перетащите гейт на схему справа</p>
+              <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
+                <p className="text-xs text-cyan-300">
+                  💡 <strong>Перетащите гейт на линию нужного кубита</strong> (q0, q1, q2)
+                </p>
+                <p className="text-xs text-cyan-400/70 mt-1">
+                  Для CNOT: сначала control, потом target
+                </p>
+              </div>
               
               {/* Однокубитные гейты */}
               <div className="grid grid-cols-5 gap-1.5">
@@ -329,8 +307,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 <input
                   type="range"
                   min={0}
-                  max={20}
-                  step={0.5}
+                  max={100}
+                  step={1}
                   value={perGateErrorProb}
                   onChange={(e) => onGateErrorConfigChange({ 
                     ...gateErrorConfig, 
@@ -339,6 +317,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   })}
                   className="w-full accent-cyan-500"
                 />
+                <p className="text-xs text-slate-500">
+                  {perGateErrorProb === 0 
+                    ? 'Ошибки отключены' 
+                    : perGateErrorProb === 100
+                      ? '⚠️ Каждый гейт даст ошибку!'
+                      : `Каждый гейт может дать ошибку с P=${perGateErrorProb.toFixed(0)}%`}
+                </p>
               </div>
               <div className="text-xs text-slate-400 mb-1">Тип ошибки:</div>
               <div className="grid grid-cols-4 gap-2">
@@ -428,7 +413,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     className="px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-500 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                     disabled={customGatePlan.length === 0}
                   >
-                    ▶ Запуск
+                    ⚡ Применить
                   </button>
                   <button
                     type="button"

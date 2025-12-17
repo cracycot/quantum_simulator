@@ -63,12 +63,16 @@ const getGateColor = (name: string, type: string): string => {
 function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepToColumnMap: Map<number, number> } {
   const gates: CircuitGate[] = [];
   const stepToColumnMap = new Map<number, number>(); // Маппинг step index -> column index
-  let column = 1; // Начинаем с колонки 1, колонка 0 зарезервирована для INIT
+  let column = 0; // Начинаем с колонки 0 для INIT гейтов (H и CNOT)
+  
+  console.log('[QuantumCircuit] Parsing steps:', steps.length, steps);
   
   steps.forEach((step, stepIdx) => {
     const desc = step.description.toLowerCase();
     
     if (step.operation) {
+      console.log('[QuantumCircuit] Step', stepIdx, 'has operation:', step.operation.name, 'type:', step.type, 'desc:', step.description);
+      
       // Skip auto-applied gate steps like "Apply X1 (noise)..." or "Apply X₁ (correction)..."
       // They are not user operations and duplicate the NOISE/ERROR + CORRECTION events.
       const isAutoAppliedGate =
@@ -77,10 +81,12 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
         desc.includes(' (noise') ||
         desc.includes(' (correction');
       if (isAutoAppliedGate) {
+        console.log('[QuantumCircuit] Skipping auto-applied gate');
         return;
       }
 
-      // Step has explicit gate operation
+      // Step has explicit gate operation - show it on circuit
+      // Include both 'gate' and 'encode' type steps (encode steps are initialization gates)
       const isGateError = step.type === 'gate-error';
       gates.push({
         name: isGateError 
@@ -88,9 +94,10 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
           : (step.operation.label || step.operation.name),
         qubits: step.operation.qubits,
         column,
-        type: step.type,
+        type: step.type === 'encode' ? 'gate' : step.type, // Treat encode as gate for visualization
         label: step.description
       });
+      console.log('[QuantumCircuit] Added gate:', gates[gates.length - 1]);
       stepToColumnMap.set(stepIdx, column);
       column++; // Увеличиваем колонку только если добавили гейт
     } else if (step.type === 'measurement') {
@@ -814,20 +821,24 @@ function generatePhaseLabels(
       return;
     }
     
-    // INIT: logStep с initialize/init - всегда показываем |0⟩ (только один раз)
-    if (step.type === 'encode' && (desc.includes('initialize') || desc.includes('init'))) {
-      if (initCreated) {
-        return; // Skip - INIT уже создан
+    // INIT: первое появление encode (с операцией или без) начинает блок INIT
+    // Все начальные encode-гейты (H, CNOT) включаются в блок INIT
+    if (step.type === 'encode') {
+      if (!initCreated) {
+        // Первый encode шаг - начинаем блок INIT
+        phaseName = 'INIT\n|0⟩';
+        phaseColor = '#22c55e';
+        initCreated = true;
+      } else if (step.operation) {
+        // Последующие encode с операциями - продолжаем блок INIT
+        phaseName = 'INIT\n|0⟩';
+        phaseColor = '#22c55e';
+      } else {
+        // encode без операции (информационные сообщения) - пропускаем
+        return;
       }
-      phaseName = 'INIT\n|0⟩';
-      phaseColor = '#22c55e';
-      initCreated = true; // Помечаем, что INIT создан
     }
-    // Пропускаем другие logStep('encode', 'Encoded...') 
-    else if (step.type === 'encode' && !desc.includes('initialize')) {
-      return; // Skip - информационные сообщения
-    }
-    // ENCODE: все gate операции (H, CNOT, и т.д.)
+    // ENCODE: все gate операции от пользователя (не начальные)
     else if (step.type === 'gate') {
       phaseName = 'ENCODE';
       phaseColor = '#3b82f6';
@@ -847,15 +858,8 @@ function generatePhaseLabels(
     // Skip if no phase name
     if (!phaseName) return;
     
-    // Get column for this step
-    let column: number;
-    if (phaseName.startsWith('INIT')) {
-      // INIT всегда в колонке 0 (зарезервированная колонка)
-      column = 0;
-    } else {
-      // Для остальных - из маппинга или предыдущая колонка
-      column = stepToColumnMap.get(stepIdx) ?? (phaseStartColumn ?? 0);
-    }
+    // Get column for this step - используем реальные колонки из маппинга
+    const column = stepToColumnMap.get(stepIdx) ?? (phaseStartColumn ?? 1);
     
     // If this is a new phase
     if (phaseName !== currentPhase) {

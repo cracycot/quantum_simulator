@@ -19,14 +19,12 @@ export interface RepetitionCodeResult {
 /**
  * Encode a single qubit into 3-qubit repetition code
  * |ψ⟩ = α|0⟩ + β|1⟩ → α|000⟩ + β|111⟩
+ * 
+ * CNOT операции теперь выполняются в initializeLogicalZero/One
  */
 export function encodeRepetition(system: QuantumSystem): void {
-  // CNOT from q0 to q1
-  system.applyGate({ name: 'CNOT', qubits: [0, 1], label: 'CNOT₀₁' });
-  // CNOT from q0 to q2
-  system.applyGate({ name: 'CNOT', qubits: [0, 2], label: 'CNOT₀₂' });
-  
-  system.logStep('encode', 'Encoded into 3-qubit repetition code: |ψ⟩ → α|000⟩ + β|111⟩');
+  // Encoding already done in initialization
+  system.logStep('encode', 'Кодирование завершено: 3-кубитный код');
 }
 
 /**
@@ -124,7 +122,7 @@ export function correctErrorRepetition(system: QuantumSystem, syndrome: [number,
  * Full QEC cycle for repetition code
  */
 export function runRepetitionCodeCycle(
-  initialState: 'zero' | 'one' | 'plus' | 'minus' = 'zero'
+  initialState: 'zero' | 'one' = 'zero'
 ): RepetitionCodeResult {
   const system = create3QubitSystem();
   
@@ -135,12 +133,6 @@ export function runRepetitionCodeCycle(
       break;
     case 'one':
       system.initializeLogicalOne();
-      break;
-    case 'plus':
-      system.initializeLogicalPlus();
-      break;
-    case 'minus':
-      system.initializeLogicalMinus();
       break;
   }
   

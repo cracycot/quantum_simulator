@@ -20,10 +20,8 @@ import type { NoiseType } from './core/noise/noise';
 import type { GateErrorConfig, GateErrorType } from './core/noise/gateErrors';
 import { defaultGateErrorConfig } from './core/noise/gateErrors';
 import { 
-  getLogicalZeroState, 
-  getLogicalOneState, 
-  getLogicalPlusState, 
-  getLogicalMinusState 
+  getLogicalZeroState,
+  getLogicalOneState
 } from './core/codes/repetition';
 import {
   getShorLogicalZeroState,
@@ -47,7 +45,7 @@ import './App.css';
 const App: React.FC = () => {
   // Configuration state
   const [codeType, setCodeType] = useState<CodeType>('repetition');
-  const [initialState, setInitialState] = useState<LogicalState>('zero');
+  const initialState: LogicalState = 'zero'; // Всегда |0⟩
   const [noiseType, setNoiseType] = useState<NoiseType>('bit-flip');
   const [errorCount, setErrorCount] = useState(1);
   const [gateErrorConfig, setGateErrorConfig] = useState<GateErrorConfig>(defaultGateErrorConfig);
@@ -92,6 +90,10 @@ const App: React.FC = () => {
     
     const sim = new QECSimulator(config);
     sim.initialize();
+    
+    console.log('[App] Initialized simulator, history length:', sim.getHistory().length);
+    console.log('[App] History:', sim.getHistory());
+    
     setSimulator(sim);
     setPhase(sim.getPhase());
     setCurrentStep(sim.getHistory().length);
@@ -310,31 +312,27 @@ const App: React.FC = () => {
   // Calculate fidelities - recalculate when simulation state changes
   const fidelities = React.useMemo(() => {
     // Force recalculation when phase or snapshot changes
-    if (!simulator || phase === 'init') return { zero: 0, one: 0, plus: 0, minus: 0 };
+    if (!simulator || phase === 'init') return { zero: 0, one: 0 };
     
     try {
       const state = simulator.getState().system.state;
       if (!state || !state.amplitudes || state.amplitudes.length === 0) {
-        return { zero: 0, one: 0, plus: 0, minus: 0 };
+        return { zero: 0, one: 0 };
       }
       
       if (codeType === 'repetition') {
         return {
           zero: state.fidelity(getLogicalZeroState()),
-          one: state.fidelity(getLogicalOneState()),
-          plus: state.fidelity(getLogicalPlusState()),
-          minus: state.fidelity(getLogicalMinusState())
+          one: state.fidelity(getLogicalOneState())
         };
       } else {
         return {
           zero: state.fidelity(getShorLogicalZeroState()),
-          one: state.fidelity(getShorLogicalOneState()),
-          plus: 0,
-          minus: 0
+          one: state.fidelity(getShorLogicalOneState())
         };
       }
     } catch {
-      return { zero: 0, one: 0, plus: 0, minus: 0 };
+      return { zero: 0, one: 0 };
     }
   }, [simulator, phase, codeType, snapshotIndex]);
 
@@ -408,8 +406,6 @@ const App: React.FC = () => {
                 setCodeType(type);
                 setSelectedQubit(0);
               }}
-              initialState={initialState}
-              onInitialStateChange={setInitialState}
               noiseType={noiseType}
               onNoiseTypeChange={setNoiseType}
               errorCount={errorCount}
@@ -441,8 +437,6 @@ const App: React.FC = () => {
             <LogicalStateIndicator
               fidelityZero={fidelities.zero}
               fidelityOne={fidelities.one}
-              fidelityPlus={codeType === 'repetition' ? fidelities.plus : undefined}
-              fidelityMinus={codeType === 'repetition' ? fidelities.minus : undefined}
             />
           </div>
 
@@ -619,13 +613,7 @@ const App: React.FC = () => {
             {/* QBER Indicator */}
             <QBERIndicator
               physicalError={errorCount / numQubits}
-              logicalError={(() => {
-                // Calculate from actual fidelity with target state
-                const targetFidelity = initialState === 'zero' ? fidelities.zero : 
-                                       initialState === 'one' ? fidelities.one :
-                                       initialState === 'plus' ? fidelities.plus : fidelities.minus;
-                return 1 - targetFidelity;
-              })()}
+              logicalError={1 - fidelities.zero}
             />
           </div>
         </div>
@@ -802,18 +790,13 @@ const App: React.FC = () => {
               const stateBefore = history[correctionStep - 1]?.stateAfter;
               if (stateBefore) {
                 if (codeType === 'repetition') {
-                  const target = initialState === 'zero' ? getLogicalZeroState() :
-                                 initialState === 'one' ? getLogicalOneState() :
-                                 initialState === 'plus' ? getLogicalPlusState() : getLogicalMinusState();
-                  return stateBefore.fidelity(target);
+                  return stateBefore.fidelity(getLogicalZeroState());
                 }
               }
             }
             return fidelities.zero < 0.5 ? fidelities.zero : 1 - fidelities.zero;
           })()}
-          fidelityAfter={initialState === 'zero' ? fidelities.zero : 
-                        initialState === 'one' ? fidelities.one :
-                        initialState === 'plus' ? fidelities.plus : fidelities.minus}
+          fidelityAfter={fidelities.zero}
         />
       )}
 

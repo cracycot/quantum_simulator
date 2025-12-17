@@ -31,50 +31,34 @@ export interface ShorCodeResult {
 /**
  * Encode a single qubit into 9-qubit Shor code
  * 
- * Step 1: Apply H to qubits 0, 3, 6 to create superposition for phase protection
- * Step 2: Apply CNOTs to spread bit-flip protection within each block
+ * Кодирование внутри блоков для защиты от битовых ошибок
  */
 export function encodeShor(system: QuantumSystem): void {
-  // Phase 1: Create GHZ-like superposition across blocks
-  // Start with |ψ⟩ = α|0⟩ + β|1⟩ on qubit 0
-  
-  // CNOT from 0 to 3 and 6
-  system.applyGatesWithDescription([
-    { name: 'CNOT', qubits: [0, 3] },
-    { name: 'CNOT', qubits: [0, 6] }
-  ], 'Spread logical qubit across blocks', 'encode');
-  
-  // Apply Hadamard to leaders of each block
-  system.applyGatesWithDescription([
-    { name: 'H', qubits: [0] },
-    { name: 'H', qubits: [3] },
-    { name: 'H', qubits: [6] }
-  ], 'Apply Hadamard to block leaders for phase protection', 'encode');
-  
-  // Phase 2: Bit-flip protection within each block
+  // Bit-flip protection within each block
   // Block 0: qubits 0,1,2
   system.applyGatesWithDescription([
     { name: 'CNOT', qubits: [0, 1] },
     { name: 'CNOT', qubits: [0, 2] }
-  ], 'Bit-flip protection in block 0 (qubits 0,1,2)', 'encode');
+  ], '🔗 Защита от битовых ошибок в блоке 0 (q₀,q₁,q₂)\nCNOT создаёт запутанность для репликации состояния', 'encode');
   
   // Block 1: qubits 3,4,5
   system.applyGatesWithDescription([
     { name: 'CNOT', qubits: [3, 4] },
     { name: 'CNOT', qubits: [3, 5] }
-  ], 'Bit-flip protection in block 1 (qubits 3,4,5)', 'encode');
+  ], '🔗 Защита от битовых ошибок в блоке 1 (q₃,q₄,q₅)\nCNOT создаёт запутанность для репликации состояния', 'encode');
   
   // Block 2: qubits 6,7,8
   system.applyGatesWithDescription([
     { name: 'CNOT', qubits: [6, 7] },
     { name: 'CNOT', qubits: [6, 8] }
-  ], 'Bit-flip protection in block 2 (qubits 6,7,8)', 'encode');
+  ], '🔗 Защита от битовых ошибок в блоке 2 (q₆,q₇,q₈)\nCNOT создаёт запутанность для репликации состояния', 'encode');
   
-  system.logStep('encode', 'Encoded into 9-qubit Shor code');
+  system.logStep('encode', '✨ Кодирование завершено: 1 логический кубит → 9 физических кубитов (код Шора)');
 }
 
 /**
  * Decode 9-qubit Shor code back to single qubit
+ * Обратная последовательность к encodeShor
  */
 export function decodeShor(system: QuantumSystem): void {
   // Reverse bit-flip encoding for each block
@@ -93,18 +77,16 @@ export function decodeShor(system: QuantumSystem): void {
     { name: 'CNOT', qubits: [0, 1] }
   ], 'Reverse bit-flip protection in block 0', 'decode');
   
-  // Reverse Hadamards
-  system.applyGatesWithDescription([
-    { name: 'H', qubits: [0] },
-    { name: 'H', qubits: [3] },
-    { name: 'H', qubits: [6] }
-  ], 'Reverse Hadamard on block leaders', 'decode');
-  
-  // Reverse phase encoding
+  // Reverse 2 CNOT between blocks
   system.applyGatesWithDescription([
     { name: 'CNOT', qubits: [0, 6] },
     { name: 'CNOT', qubits: [0, 3] }
   ], 'Merge blocks back to single qubit', 'decode');
+  
+  // Reverse Hadamard
+  system.applyGatesWithDescription([
+    { name: 'H', qubits: [0] }
+  ], 'Reverse Hadamard: |+⟩ → |0⟩', 'decode');
   
   system.logStep('decode', 'Decoded from 9-qubit Shor code');
 }
@@ -218,6 +200,7 @@ export function correctBitFlipErrors(
 ): number[] {
   const corrected: number[] = [];
   const blocks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]];
+  const corrections: string[] = [];
   
   for (let blockIdx = 0; blockIdx < 3; blockIdx++) {
     const s1 = syndrome[blockIdx * 2];
@@ -226,20 +209,34 @@ export function correctBitFlipErrors(
     
     if (s1 === 0 && s2 === 0) {
       // No error in this block
+      corrections.push(`Блок ${blockIdx}: синдром (0,0) → ошибки нет`);
     } else if (s1 === 1 && s2 === 0) {
+      // Perfect correction - no gate errors
       system.applyGate({ name: 'X', qubits: [q0], label: `X${q0} (bit correction)` });
       corrected.push(q0);
+      corrections.push(`Блок ${blockIdx}: синдром (1,0) → применить X к q${q0}`);
     } else if (s1 === 1 && s2 === 1) {
       system.applyGate({ name: 'X', qubits: [q1], label: `X${q1} (bit correction)` });
       corrected.push(q1);
+      corrections.push(`Блок ${blockIdx}: синдром (1,1) → применить X к q${q1}`);
     } else if (s1 === 0 && s2 === 1) {
       system.applyGate({ name: 'X', qubits: [q2], label: `X${q2} (bit correction)` });
       corrected.push(q2);
+      corrections.push(`Блок ${blockIdx}: синдром (0,1) → применить X к q${q2}`);
     }
   }
   
   if (corrected.length > 0) {
-    system.logStep('correction', `Corrected bit-flip errors on qubits: ${corrected.join(', ')}`);
+    const correctionDescription = `✅ КОРРЕКЦИЯ БИТ-ФЛИП ОШИБОК:\n` +
+      `${corrections.join('\n')}\n` +
+      `\n🔧 Применён X-гейт (переворот бита) к кубитам: ${corrected.join(', ')}\n` +
+      `Действие: X|0⟩ = |1⟩, X|1⟩ = |0⟩`;
+    system.logStep('correction', correctionDescription);
+  } else {
+    const correctionDescription = `✅ КОРРЕКЦИЯ БИТ-ФЛИП ОШИБОК:\n` +
+      `${corrections.join('\n')}\n` +
+      `\n🎉 Ошибок не обнаружено - коррекция не требуется`;
+    system.logStep('correction', correctionDescription);
   }
   
   return corrected;
@@ -258,25 +255,43 @@ export function correctPhaseFlipErrors(
   // Phase syndrome indicates which block has wrong phase
   // Apply Z to any qubit in that block (they're entangled)
   
+  let correctionDescription = '';
+  
   if (s1 === 0 && s2 === 0) {
     // No phase error
+    correctionDescription = `✅ КОРРЕКЦИЯ ФАЗОВЫХ ОШИБОК:\n` +
+      `Синдром (0,0) → фазовой ошибки нет\n` +
+      `\n🎉 Коррекция не требуется`;
   } else if (s1 === 1 && s2 === 0) {
-    // Block 0 has wrong phase relative to others
+    // Block 0 has wrong phase relative to others - perfect correction
     system.applyGate({ name: 'Z', qubits: [0], label: 'Z₀ (phase correction)' });
     corrected.push(0);
+    correctionDescription = `✅ КОРРЕКЦИЯ ФАЗОВЫХ ОШИБОК:\n` +
+      `Синдром (1,0) → фазовая ошибка в блоке 0\n` +
+      `\n🔧 Применён Z-гейт к q₀\n` +
+      `Действие: Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩ (переворот фазы)\n` +
+      `Благодаря запутанности, коррекция одного кубита исправляет весь блок`;
   } else if (s1 === 1 && s2 === 1) {
     // Block 1 has wrong phase
     system.applyGate({ name: 'Z', qubits: [3], label: 'Z₃ (phase correction)' });
     corrected.push(3);
+    correctionDescription = `✅ КОРРЕКЦИЯ ФАЗОВЫХ ОШИБОК:\n` +
+      `Синдром (1,1) → фазовая ошибка в блоке 1\n` +
+      `\n🔧 Применён Z-гейт к q₃\n` +
+      `Действие: Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩ (переворот фазы)\n` +
+      `Благодаря запутанности, коррекция одного кубита исправляет весь блок`;
   } else if (s1 === 0 && s2 === 1) {
     // Block 2 has wrong phase
     system.applyGate({ name: 'Z', qubits: [6], label: 'Z₆ (phase correction)' });
     corrected.push(6);
+    correctionDescription = `✅ КОРРЕКЦИЯ ФАЗОВЫХ ОШИБОК:\n` +
+      `Синдром (0,1) → фазовая ошибка в блоке 2\n` +
+      `\n🔧 Применён Z-гейт к q₆\n` +
+      `Действие: Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩ (переворот фазы)\n` +
+      `Благодаря запутанности, коррекция одного кубита исправляет весь блок`;
   }
   
-  if (corrected.length > 0) {
-    system.logStep('correction', `Corrected phase-flip error in block ${corrected[0] / 3}`);
-  }
+  system.logStep('correction', correctionDescription);
   
   return corrected;
 }
@@ -290,14 +305,41 @@ export function measureAndCorrectShor(system: QuantumSystem): {
   bitCorrected: number[];
   phaseCorrected: number[];
 } {
-  // First correct bit-flip errors
+  // Step 1: Measure bit-flip syndrome
   const bitFlipSyndrome = measureBitFlipSyndrome(system);
-  system.logStep('measurement', `Bit-flip syndrome: [${bitFlipSyndrome.join(', ')}]`);
+  
+  // Decode syndromes for each block
+  const block0Syndrome = `(${bitFlipSyndrome[0]}, ${bitFlipSyndrome[1]})`;
+  const block1Syndrome = `(${bitFlipSyndrome[2]}, ${bitFlipSyndrome[3]})`;
+  const block2Syndrome = `(${bitFlipSyndrome[4]}, ${bitFlipSyndrome[5]})`;
+  
+  // Detailed measurement description
+  const bitSyndromeDescription = `🔍 ИЗМЕРЕНИЕ БИТ-ФЛИП СИНДРОМА:\n` +
+    `Алгоритм: для каждого блока из 3 кубитов измеряем четность пар.\n` +
+    `Блок 0 (q₀,q₁,q₂): синдром ${block0Syndrome} - проверка Z₀Z₁ и Z₁Z₂\n` +
+    `Блок 1 (q₃,q₄,q₅): синдром ${block1Syndrome} - проверка Z₃Z₄ и Z₄Z₅\n` +
+    `Блок 2 (q₆,q₇,q₈): синдром ${block2Syndrome} - проверка Z₆Z₇ и Z₇Z₈\n` +
+    `\n💡 Интерпретация:\n` +
+    `(0,0) → нет ошибки | (1,0) → ошибка на 1-м кубите\n` +
+    `(1,1) → ошибка на 2-м кубите | (0,1) → ошибка на 3-м кубите`;
+  
+  system.logStep('measurement', bitSyndromeDescription);
   const bitCorrected = correctBitFlipErrors(system, bitFlipSyndrome);
   
-  // Then correct phase-flip errors
+  // Step 2: Measure phase-flip syndrome
   const phaseFlipSyndrome = measurePhaseFlipSyndrome(system);
-  system.logStep('measurement', `Phase-flip syndrome: [${phaseFlipSyndrome.join(', ')}]`);
+  
+  const phaseSyndromeDescription = `🔍 ИЗМЕРЕНИЕ ФАЗОВОГО СИНДРОМА:\n` +
+    `Алгоритм: проверяем согласованность фаз между блоками.\n` +
+    `Синдром: (${phaseFlipSyndrome[0]}, ${phaseFlipSyndrome[1]})\n` +
+    `\n💡 Интерпретация:\n` +
+    `(0,0) → фазовой ошибки нет\n` +
+    `(1,0) → фазовая ошибка в блоке 0 → применить Z₀\n` +
+    `(1,1) → фазовая ошибка в блоке 1 → применить Z₃\n` +
+    `(0,1) → фазовая ошибка в блоке 2 → применить Z₆\n` +
+    `\n🎯 Метод: сравниваем относительные знаки амплитуд |000⟩ и |111⟩ в каждом блоке`;
+  
+  system.logStep('measurement', phaseSyndromeDescription);
   const phaseCorrected = correctPhaseFlipErrors(system, phaseFlipSyndrome);
   
   return {
@@ -312,7 +354,7 @@ export function measureAndCorrectShor(system: QuantumSystem): {
  * Full QEC cycle for Shor code
  */
 export function runShorCodeCycle(
-  initialState: 'zero' | 'one' | 'plus' | 'minus' = 'zero'
+  initialState: 'zero' | 'one' = 'zero'
 ): ShorCodeResult {
   const system = create9QubitShorSystem();
   
@@ -323,12 +365,6 @@ export function runShorCodeCycle(
       break;
     case 'one':
       system.initializeLogicalOne();
-      break;
-    case 'plus':
-      system.initializeLogicalPlus();
-      break;
-    case 'minus':
-      system.initializeLogicalMinus();
       break;
   }
   
