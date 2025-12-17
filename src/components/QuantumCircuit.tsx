@@ -63,7 +63,7 @@ const getGateColor = (name: string, type: string): string => {
 function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepToColumnMap: Map<number, number> } {
   const gates: CircuitGate[] = [];
   const stepToColumnMap = new Map<number, number>(); // Маппинг step index -> column index
-  let column = 0; // Счетчик колонок без пропусков
+  let column = 1; // Начинаем с колонки 1, колонка 0 зарезервирована для INIT
   
   steps.forEach((step, stepIdx) => {
     const desc = step.description.toLowerCase();
@@ -386,7 +386,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
   const wireSpacing = 50;
   const columnWidth = 55;
   const phaseLabelsHeight = 50; // Увеличено для поддержки двух строк
-  const padding = { left: 70, right: 40, top: 30, bottom: 30 };
+  const padding = { left: 100, right: 40, top: 30, bottom: 30 }; // Увеличен left для отступа гейтов
   
   const width = Math.max(padding.left + totalColumns * columnWidth + padding.right, 400);
   const height = phaseLabelsHeight + padding.top + (numQubits - 1) * wireSpacing + padding.bottom;
@@ -789,32 +789,31 @@ function generatePhaseLabels(
     // Determine phase from step type and description
     const desc = step.description.toLowerCase();
     
-    // Priority 1: Check if this is an initialization gate (H or CNOT during init/encode)
-    if (step.type === 'gate' && step.isInitialization === true) {
-      phaseName = 'INIT';
-      phaseColor = '#22c55e';
-    } 
-    // Priority 2: Check if this is a gate operation without isInitialization flag
-    // If it's a gate with superposition/entanglement effect, it's automatic encoding → INIT
-    else if (step.type === 'gate' && step.isInitialization === undefined) {
-      // Gate operations without isInitialization are automatic (CNOT during encodeRepetition)
-      // They should be INIT, not ENCODE
-      phaseName = 'INIT';
+    // INIT: logStep с initialize/init - показываем начальное состояние
+    if (step.type === 'encode' && (desc.includes('initialize') || desc.includes('init'))) {
+      // Извлекаем начальное состояние из описания
+      if (desc.includes('|+⟩') || desc.includes('|+>')) {
+        phaseName = 'INIT\n|+⟩';
+      } else if (desc.includes('|−⟩') || desc.includes('|->') || desc.includes('|–⟩')) {
+        phaseName = 'INIT\n|−⟩';
+      } else if (desc.includes('|1⟩') || desc.includes('|1>')) {
+        phaseName = 'INIT\n|1⟩';
+      } else {
+        phaseName = 'INIT\n|0⟩'; // По умолчанию |0⟩
+      }
       phaseColor = '#22c55e';
     }
-    // Priority 3: Check encode log steps
-    else if (step.type === 'encode' && (desc.includes('initialize') || desc.includes('init'))) {
-      phaseName = 'INIT';
-      phaseColor = '#22c55e';
-    } 
-    // Priority 4: ENCODE should only appear if there are explicit gates from palette
-    // For now, we don't show ENCODE phase label - all automatic operations are INIT
-    // ENCODE will only appear if user explicitly adds gates from palette (handled separately)
+    // Пропускаем другие logStep('encode', 'Encoded...') 
     else if (step.type === 'encode' && !desc.includes('initialize')) {
-      // Skip this - don't create ENCODE phase for automatic encoding
-      // ENCODE should only appear for explicit palette gates
-      return; // Skip this step, don't create phase label
-    } else if (step.type === 'noise' || step.type === 'gate-error') {
+      return; // Skip - информационные сообщения
+    }
+    // ENCODE: все gate операции (H, CNOT, и т.д.)
+    else if (step.type === 'gate') {
+      phaseName = 'ENCODE';
+      phaseColor = '#3b82f6';
+    }
+    // NOISE/ERROR
+    else if (step.type === 'noise' || step.type === 'gate-error') {
       phaseName = 'NOISE/\nERROR'; // Перенос строки для лучшего отображения
       phaseColor = '#ef4444';
     } else if (step.type === 'measurement') {
@@ -828,8 +827,15 @@ function generatePhaseLabels(
     // Skip if no phase name
     if (!phaseName) return;
     
-    // Get column for this step (if it has a gate, use that column; otherwise use previous column or 0)
-    const column = stepToColumnMap.get(stepIdx) ?? (phaseStartColumn ?? 0);
+    // Get column for this step
+    let column: number;
+    if (phaseName.startsWith('INIT')) {
+      // INIT всегда в колонке 0 (зарезервированная колонка)
+      column = 0;
+    } else {
+      // Для остальных - из маппинга или предыдущая колонка
+      column = stepToColumnMap.get(stepIdx) ?? (phaseStartColumn ?? 0);
+    }
     
     // If this is a new phase
     if (phaseName !== currentPhase) {

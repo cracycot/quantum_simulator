@@ -64,8 +64,6 @@ export interface QuantumStep {
   correctionDetails?: CorrectionDetails;
   // Transformation details for educational view
   transformation?: StateTransformation;
-  // Flag to indicate if gate was applied during initialization (not from palette)
-  isInitialization?: boolean;
 }
 
 export interface SimulationLog {
@@ -136,7 +134,7 @@ export class QuantumSystem {
   initializeLogicalOne(): void {
     this.state = new StateVector(this.numQubits);
     this.logStep('encode', 'Initialize to |0...0⟩');
-    this.applyGate({ name: 'X', qubits: [0] }, true); // isInitialization = true
+    this.applyGate({ name: 'X', qubits: [0] });
     this.logStep('encode', 'Initialize to |1⟩ on data qubit');
   }
 
@@ -146,7 +144,7 @@ export class QuantumSystem {
   initializeLogicalPlus(): void {
     this.state = new StateVector(this.numQubits);
     this.logStep('encode', 'Initialize to |0...0⟩');
-    this.applyGate({ name: 'H', qubits: [0] }, true); // isInitialization = true
+    this.applyGate({ name: 'H', qubits: [0] });
     this.logStep('encode', 'Initialize to |+⟩ on data qubit');
   }
 
@@ -156,8 +154,8 @@ export class QuantumSystem {
   initializeLogicalMinus(): void {
     this.state = new StateVector(this.numQubits);
     this.logStep('encode', 'Initialize to |0...0⟩');
-    this.applyGate({ name: 'X', qubits: [0] }, true); // isInitialization = true
-    this.applyGate({ name: 'H', qubits: [0] }, true); // isInitialization = true
+    this.applyGate({ name: 'X', qubits: [0] });
+    this.applyGate({ name: 'H', qubits: [0] });
     this.logStep('encode', 'Initialize to |−⟩ on data qubit');
   }
 
@@ -417,10 +415,8 @@ export class QuantumSystem {
 
   /**
    * Apply a quantum gate
-   * @param op - Gate operation to apply
-   * @param isInitialization - If true, gate is part of initialization (not from palette)
    */
-  applyGate(op: GateOperation, isInitialization: boolean = false): void {
+  applyGate(op: GateOperation): void {
     const stateBefore = this.state.clone();
     applyGateInternal(this.state, op);
     const stateAfter = this.state.clone();
@@ -442,8 +438,7 @@ export class QuantumSystem {
       stateAfter,
       timestamp: this.stepCounter++,
       latex,
-      transformation,
-      isInitialization
+      transformation
     });
 
     this.applyGateErrorIfNeeded(op.qubits, op.name);

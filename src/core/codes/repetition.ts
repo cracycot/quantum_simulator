@@ -22,10 +22,9 @@ export interface RepetitionCodeResult {
  */
 export function encodeRepetition(system: QuantumSystem): void {
   // CNOT from q0 to q1
-  // These are automatic encoding operations (not from palette), so mark as initialization
-  system.applyGate({ name: 'CNOT', qubits: [0, 1], label: 'CNOT₀₁' }, true);
+  system.applyGate({ name: 'CNOT', qubits: [0, 1], label: 'CNOT₀₁' });
   // CNOT from q0 to q2
-  system.applyGate({ name: 'CNOT', qubits: [0, 2], label: 'CNOT₀₂' }, true);
+  system.applyGate({ name: 'CNOT', qubits: [0, 2], label: 'CNOT₀₂' });
   
   system.logStep('encode', 'Encoded into 3-qubit repetition code: |ψ⟩ → α|000⟩ + β|111⟩');
 }
