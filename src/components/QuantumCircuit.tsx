@@ -781,6 +781,7 @@ function generatePhaseLabels(
   const phases: Array<{ name: string; start: number; end: number; color: string }> = [];
   let currentPhase: string | null = null;
   let phaseStartColumn: number | null = null;
+  let initCreated = false; // Флаг для отслеживания создания INIT блока
   
   steps.forEach((step, stepIdx) => {
     let phaseName = '';
@@ -789,19 +790,14 @@ function generatePhaseLabels(
     // Determine phase from step type and description
     const desc = step.description.toLowerCase();
     
-    // INIT: logStep с initialize/init - показываем начальное состояние
+    // INIT: logStep с initialize/init - всегда показываем |0⟩ (только один раз)
     if (step.type === 'encode' && (desc.includes('initialize') || desc.includes('init'))) {
-      // Извлекаем начальное состояние из описания
-      if (desc.includes('|+⟩') || desc.includes('|+>')) {
-        phaseName = 'INIT\n|+⟩';
-      } else if (desc.includes('|−⟩') || desc.includes('|->') || desc.includes('|–⟩')) {
-        phaseName = 'INIT\n|−⟩';
-      } else if (desc.includes('|1⟩') || desc.includes('|1>')) {
-        phaseName = 'INIT\n|1⟩';
-      } else {
-        phaseName = 'INIT\n|0⟩'; // По умолчанию |0⟩
+      if (initCreated) {
+        return; // Skip - INIT уже создан
       }
+      phaseName = 'INIT\n|0⟩';
       phaseColor = '#22c55e';
+      initCreated = true; // Помечаем, что INIT создан
     }
     // Пропускаем другие logStep('encode', 'Encoded...') 
     else if (step.type === 'encode' && !desc.includes('initialize')) {
