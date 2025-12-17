@@ -395,7 +395,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
   const totalColumns = baseNumColumns + customGateColumns + extraSpace;
   
   const wireSpacing = 50;
-  const columnWidth = 55;
+  const columnWidth = 80; // Увеличено расстояние между колонками (клеточками) для лучшей читаемости
   const phaseLabelsHeight = 50; // Увеличено для поддержки двух строк
   const padding = { left: 100, right: 40, top: 30, bottom: 30 }; // Увеличен left для отступа гейтов
   
@@ -881,11 +881,12 @@ function generatePhaseLabels(
   
   return phases.map((phase, idx) => {
     // Add gap between phases to prevent overlapping
-    const leftMargin = idx > 0 ? 5 : 0; // 5px gap on the left (except first)
-    const rightMargin = idx < phases.length - 1 ? 5 : 0; // 5px gap on the right (except last)
+    const leftMargin = idx > 0 ? 10 : 0; // 5px gap on the left (except first)
+    const rightMargin = idx < phases.length - 1 ? 10 : 0; // 5px gap on the right (except last)
     
-    const startX = getColumnX(phase.start) - 30 + leftMargin;
-    const endX = getColumnX(phase.end) + 30 - rightMargin;
+    // Увеличено расширение блоков для размещения длинных слов типа "CORRECTION"
+    const startX = getColumnX(phase.start) - 45 + leftMargin;
+    const endX = getColumnX(phase.end) + 45 - rightMargin;
     const centerX = (startX + endX) / 2;
     return { ...phase, startX, endX, centerX };
   });
@@ -900,7 +901,7 @@ export const PhaseLabels: React.FC<{
   columnWidth: number;
   padding: { left: number; right: number };
 }> = ({ steps, width, columnWidth, padding }) => {
-  const phases = generatePhaseLabels(steps, columnWidth, padding);
+  const phases = generatePhaseLabels(steps, columnWidth, padding, new Map());
   
   return (
     <div className="absolute top-0 left-0 right-0" style={{ height: '40px', pointerEvents: 'none' }}>
