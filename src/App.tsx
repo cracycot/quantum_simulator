@@ -72,7 +72,8 @@ const App: React.FC = () => {
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Get number of qubits based on code type
-  const numQubits = codeType === 'repetition' ? 3 : 9;
+  // repetition: 3 data + 2 ancilla (honest syndrome measurement)
+  const numQubits = codeType === 'repetition' ? 5 : 9;
 
   // Initialize simulator - only when code type or initial state changes
   const initializeSimulator = useCallback(() => {
@@ -83,7 +84,9 @@ const App: React.FC = () => {
         type: noiseType,
         probability: 0,
         mode: 'exact-count',
-        exactCount: errorCount
+        exactCount: errorCount,
+        // For repetition: apply noise only to data qubits (q0,q1,q2), not ancillas
+        targetQubits: codeType === 'repetition' ? [0, 1, 2] : undefined
       },
       gateErrorConfig
     };
@@ -457,7 +460,11 @@ const App: React.FC = () => {
                       numQubits={numQubits}
                       steps={simulator.getHistory()}
                       currentStep={currentStep}
-                      qubitLabels={Array.from({ length: numQubits }, (_, i) => `q${i}`)}
+                      qubitLabels={
+                        codeType === 'repetition'
+                          ? ['q0', 'q1', 'q2', 'a0', 'a1']
+                          : Array.from({ length: numQubits }, (_, i) => `q${i}`)
+                      }
                       isDroppable={activeConfigTab === 'gate-error'}
                       onGateDrop={handleGateDrop}
                       pendingTwoQubitGate={pendingTwoQubitGate}

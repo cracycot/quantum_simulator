@@ -128,8 +128,8 @@ export class QuantumSystem {
     
     console.log('[QuantumSystem] initializeLogicalZero, numQubits:', this.numQubits);
     
-    // For 3-qubit repetition code
-    if (this.numQubits === 3) {
+    // For repetition code: 3 data qubits (+ optional ancillas)
+    if (this.numQubits === 3 || this.numQubits === 5) {
       console.log('[QuantumSystem] Applying H + 2 CNOTs for 3-qubit code');
       // Step 1: Apply Hadamard to create superposition |0⟩→|+⟩
       this.applyGatesWithDescription([
@@ -171,8 +171,8 @@ export class QuantumSystem {
       { name: 'X', qubits: [0], label: 'X₀' }
     ], '🔴 X на q₀: переход в |1⟩', 'encode');
     
-    // For 3-qubit repetition code
-    if (this.numQubits === 3) {
+    // For repetition code: 3 data qubits (+ optional ancillas)
+    if (this.numQubits === 3 || this.numQubits === 5) {
       // Step 1: Apply Hadamard to create superposition |1⟩→|−⟩
       this.applyGatesWithDescription([
         { name: 'H', qubits: [0], label: 'H₀' }
@@ -565,11 +565,13 @@ export class QuantumSystem {
   /**
    * Measure a qubit (destructive)
    */
-  measureQubit(qubitIndex: number): number {
+  measureQubit(qubitIndex: number, descriptionOverride?: string): number {
     const stateBefore = this.state.clone();
     const result = this.state.measureQubit(qubitIndex);
     const stateAfter = this.state.clone();
-    const description = `Measure ${this.qubits[qubitIndex]?.label || `q${qubitIndex}`}: result = ${result}`;
+    const description =
+      descriptionOverride ??
+      `Measure ${this.qubits[qubitIndex]?.label || `q${qubitIndex}`}: result = ${result}`;
     
     const transformation = this.generateStepTransformation('measurement', description, stateBefore, stateAfter);
     
@@ -748,6 +750,20 @@ export function create3QubitSystem(gateErrorConfig?: GateErrorConfig): QuantumSy
   system.setQubitInfo(0, 'q₀', 'data');
   system.setQubitInfo(1, 'q₁', 'data');
   system.setQubitInfo(2, 'q₂', 'data');
+  return system;
+}
+
+/**
+ * Create a quantum system for 3-qubit repetition code with 2 ancillas for honest syndrome measurement
+ * Qubits: q0,q1,q2 (data) + a0,a1 (ancilla)
+ */
+export function create5QubitRepetitionSystem(gateErrorConfig?: GateErrorConfig): QuantumSystem {
+  const system = new QuantumSystem(5, gateErrorConfig);
+  system.setQubitInfo(0, 'q₀', 'data');
+  system.setQubitInfo(1, 'q₁', 'data');
+  system.setQubitInfo(2, 'q₂', 'data');
+  system.setQubitInfo(3, 'a₀', 'ancilla');
+  system.setQubitInfo(4, 'a₁', 'ancilla');
   return system;
 }
 

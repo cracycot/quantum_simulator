@@ -3,7 +3,7 @@
  * Orchestrates encoding, noise, syndrome measurement, and correction
  */
 import { StateVector } from './quantum/complex';
-import { QuantumSystem, create3QubitSystem, create9QubitShorSystem } from './quantum/system';
+import { QuantumSystem, create5QubitRepetitionSystem, create9QubitShorSystem } from './quantum/system';
 import type { QuantumStep } from './quantum/system';
 import type { GateOperation } from './quantum/gates';
 import { 
@@ -82,7 +82,7 @@ export class QECSimulator {
 
   private createInitialState(config: SimulatorConfig): SimulatorState {
     const system = config.codeType === 'repetition' 
-      ? create3QubitSystem(config.gateErrorConfig) 
+      ? create5QubitRepetitionSystem(config.gateErrorConfig) 
       : create9QubitShorSystem(config.gateErrorConfig);
     
     return {
@@ -323,7 +323,9 @@ export class QECSimulator {
     if (config.codeType === 'repetition') {
       const syndrome = measureSyndromeRepetition(system);
       this.state.syndrome = syndrome;
-      system.logStep('measurement', `Измерение синдрома: (${syndrome[0]}, ${syndrome[1]})`);
+      // Syndrome measurement is now performed via ancillas and already recorded as measurement steps.
+      // Avoid adding an extra generic measurement step that would create a misleading marker on the circuit.
+      system.logStep('encode', `Синдром измерен: (${syndrome[0]}, ${syndrome[1]})`);
       
       // Apply correction based on syndrome
       const correctedQubit = correctErrorRepetition(system, syndrome as [number, number]);

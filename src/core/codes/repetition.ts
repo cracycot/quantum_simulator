@@ -5,8 +5,9 @@
  * Can correct single X (bit-flip) errors
  * Cannot correct Z (phase-flip) errors
  */
-import { QuantumSystem, create3QubitSystem } from '../quantum/system';
+import { QuantumSystem, create5QubitRepetitionSystem } from '../quantum/system';
 import { Complex, StateVector } from '../quantum/complex';
+import { applyGate } from '../quantum/gates';
 
 export interface RepetitionCodeResult {
   system: QuantumSystem;
@@ -50,41 +51,68 @@ export function decodeRepetition(system: QuantumSystem): void {
  * (0,1) → Error on q2
  */
 export function measureSyndromeRepetition(system: QuantumSystem): [number, number] {
-  // For simulation, we compute syndrome from state without collapsing
-  // In real QEC, we'd use ancilla qubits
-  
+  // Honest syndrome measurement uses 2 ancillas:
+  // Measure Z0Z1 via a0, and Z1Z2 via a1.
+  // Circuit for Zij with ancilla a (prepared in |0⟩):
+  // CX(qi -> a), CX(qj -> a), measure a in Z.
+
+  if (system.numQubits >= 5) {
+    const a0 = 3;
+    const a1 = 4;
+
+    // --- S1 = Z0 Z1 on a0 ---
+    system.applyGatesWithDescription(
+      [
+        { name: 'CNOT', qubits: [0, a0], label: 'CNOT₀→a₀ (syndrome)' },
+        { name: 'CNOT', qubits: [1, a0], label: 'CNOT₁→a₀ (syndrome)' }
+      ],
+      'Syndrome coupling for Z₀Z₁',
+      'gate'
+    );
+    const s1 = system.measureQubit(a0, 'Measure a₀ (Z): s₁ = parity(q₀,q₁)');
+    // Reset ancilla to |0⟩ to keep state comparable for fidelity / next steps
+    if (s1 === 1) {
+      applyGate(system.state, { name: 'X', qubits: [a0] });
+    }
+
+    // --- S2 = Z1 Z2 on a1 ---
+    system.applyGatesWithDescription(
+      [
+        { name: 'CNOT', qubits: [1, a1], label: 'CNOT₁→a₁ (syndrome)' },
+        { name: 'CNOT', qubits: [2, a1], label: 'CNOT₂→a₁ (syndrome)' }
+      ],
+      'Syndrome coupling for Z₁Z₂',
+      'gate'
+    );
+    const s2 = system.measureQubit(a1, 'Measure a₁ (Z): s₂ = parity(q₁,q₂)');
+    if (s2 === 1) {
+      applyGate(system.state, { name: 'X', qubits: [a1] });
+    }
+
+    return [s1, s2];
+  }
+
+  // Legacy (no ancillas): compute syndrome from expectation values without collapsing
   const state = system.state;
-  const n = state.numQubits;
-  
-  // Compute ⟨Z₀Z₁⟩ and ⟨Z₁Z₂⟩
-  // Z₀Z₁|abc⟩ = (-1)^(a⊕b)|abc⟩
-  // Z₁Z₂|abc⟩ = (-1)^(b⊕c)|abc⟩
-  
   let expZ01 = 0;
   let expZ12 = 0;
-  
+
   for (let i = 0; i < state.dimension; i++) {
     const prob = state.amplitudes[i].absSquared();
     const q0 = (i >> 0) & 1;
     const q1 = (i >> 1) & 1;
     const q2 = (i >> 2) & 1;
-    
-    // Eigenvalue of Z₀Z₁ on |abc⟩
+
     const z01 = (q0 ^ q1) === 0 ? 1 : -1;
     const z12 = (q1 ^ q2) === 0 ? 1 : -1;
-    
+
     expZ01 += prob * z01;
     expZ12 += prob * z12;
   }
-  
-  // Convert expectation values to syndrome bits
-  // If ⟨ZᵢZⱼ⟩ ≈ +1 → syndrome = 0 (no error in that pair)
-  // If ⟨ZᵢZⱼ⟩ ≈ -1 → syndrome = 1 (error detected)
+
   const s1 = expZ01 < 0 ? 1 : 0;
   const s2 = expZ12 < 0 ? 1 : 0;
-  
-  system.logStep('measurement', `Syndrome measurement: (${s1}, ${s2})`);
-  
+
   return [s1, s2];
 }
 
@@ -124,7 +152,7 @@ export function correctErrorRepetition(system: QuantumSystem, syndrome: [number,
 export function runRepetitionCodeCycle(
   initialState: 'zero' | 'one' = 'zero'
 ): RepetitionCodeResult {
-  const system = create3QubitSystem();
+  const system = create5QubitRepetitionSystem();
   
   // Initialize
   switch (initialState) {
@@ -171,31 +199,31 @@ export function runRepetitionCodeCycle(
  * Create reference logical states for fidelity calculation
  */
 export function getLogicalZeroState(): StateVector {
-  const sv = new StateVector(3);
-  sv.amplitudes[0b000] = Complex.one();
+  const sv = new StateVector(5);
+  sv.amplitudes[0b00000] = Complex.one();
   return sv;
 }
 
 export function getLogicalOneState(): StateVector {
-  const sv = new StateVector(3);
-  sv.amplitudes[0b000] = Complex.zero(); // Clear default |000⟩
-  sv.amplitudes[0b111] = Complex.one();  // Set |111⟩
+  const sv = new StateVector(5);
+  sv.amplitudes[0b00000] = Complex.zero(); // Clear default |00000⟩
+  sv.amplitudes[0b00111] = Complex.one();  // |11100⟩ (data=111, ancilla=00)
   return sv;
 }
 
 export function getLogicalPlusState(): StateVector {
-  const sv = new StateVector(3);
+  const sv = new StateVector(5);
   const s = 1 / Math.sqrt(2);
-  sv.amplitudes[0b000] = new Complex(s);
-  sv.amplitudes[0b111] = new Complex(s);
+  sv.amplitudes[0b00000] = new Complex(s);
+  sv.amplitudes[0b00111] = new Complex(s);
   return sv;
 }
 
 export function getLogicalMinusState(): StateVector {
-  const sv = new StateVector(3);
+  const sv = new StateVector(5);
   const s = 1 / Math.sqrt(2);
-  sv.amplitudes[0b000] = new Complex(s);
-  sv.amplitudes[0b111] = new Complex(-s);
+  sv.amplitudes[0b00000] = new Complex(s);
+  sv.amplitudes[0b00111] = new Complex(-s);
   return sv;
 }
 
