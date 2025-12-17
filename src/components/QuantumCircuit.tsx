@@ -69,6 +69,17 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
     const desc = step.description.toLowerCase();
     
     if (step.operation) {
+      // Skip auto-applied gate steps like "Apply X1 (noise)..." or "Apply X₁ (correction)..."
+      // They are not user operations and duplicate the NOISE/ERROR + CORRECTION events.
+      const isAutoAppliedGate =
+        desc.includes('(noise)') ||
+        desc.includes('(correction)') ||
+        desc.includes(' (noise') ||
+        desc.includes(' (correction');
+      if (isAutoAppliedGate) {
+        return;
+      }
+
       // Step has explicit gate operation
       const isGateError = step.type === 'gate-error';
       gates.push({
@@ -781,6 +792,7 @@ function generatePhaseLabels(
   const phases: Array<{ name: string; start: number; end: number; color: string }> = [];
   let currentPhase: string | null = null;
   let phaseStartColumn: number | null = null;
+  let phaseEndColumn: number | null = null;
   let initCreated = false; // Флаг для отслеживания создания INIT блока
   
   steps.forEach((step, stepIdx) => {
@@ -789,6 +801,18 @@ function generatePhaseLabels(
     
     // Determine phase from step type and description
     const desc = step.description.toLowerCase();
+
+    // Skip auto-applied gate-steps like "Apply X1 (noise)..." or "Apply X₁ (correction)..."
+    // They are not "ENCODE" operations and duplicate the NOISE/ERROR + CORRECTION labels.
+    const isAutoAppliedGate =
+      step.type === 'gate' &&
+      (desc.includes('(noise)') ||
+        desc.includes('(correction)') ||
+        desc.includes(' (noise') ||
+        desc.includes(' (correction'));
+    if (isAutoAppliedGate) {
+      return;
+    }
     
     // INIT: logStep с initialize/init - всегда показываем |0⟩ (только один раз)
     if (step.type === 'encode' && (desc.includes('initialize') || desc.includes('init'))) {
@@ -836,19 +860,20 @@ function generatePhaseLabels(
     // If this is a new phase
     if (phaseName !== currentPhase) {
       // Close previous phase if exists
-      if (currentPhase !== null && phases.length > 0 && phaseStartColumn !== null) {
-        const prevColumn = stepToColumnMap.get(stepIdx - 1) ?? phaseStartColumn;
-        phases[phases.length - 1].end = prevColumn;
+      if (currentPhase !== null && phases.length > 0 && phaseEndColumn !== null) {
+        phases[phases.length - 1].end = phaseEndColumn;
       }
       // Start new phase
       currentPhase = phaseName;
       phaseStartColumn = column;
+      phaseEndColumn = column;
       phases.push({ name: phaseName, start: column, end: column, color: phaseColor });
     } else {
       // Continue current phase - extend end to current column
       if (phases.length > 0) {
         phases[phases.length - 1].end = column;
       }
+      phaseEndColumn = column;
     }
   });
   
