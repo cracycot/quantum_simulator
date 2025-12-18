@@ -88,7 +88,13 @@ const App: React.FC = () => {
         // For repetition: apply noise only to data qubits (q0,q1,q2), not ancillas
         targetQubits: codeType === 'repetition' ? [0, 1, 2] : undefined
       },
-      gateErrorConfig
+      // Gate errors disabled for initialization - only apply to user gates
+      gateErrorConfig: {
+        enabled: false,
+        type: 'none',
+        probability: 0,
+        applyTo: 'all'
+      }
     };
     
     const sim = new QECSimulator(config);
@@ -160,7 +166,13 @@ const App: React.FC = () => {
         mode: 'exact-count',
         exactCount: errorCount
       },
-      gateErrorConfig
+      // Gate errors disabled for initialization
+      gateErrorConfig: {
+        enabled: false,
+        type: 'none',
+        probability: 0,
+        applyTo: 'all'
+      }
     };
     
     const sim = new QECSimulator(config);
@@ -203,6 +215,8 @@ const App: React.FC = () => {
 
   const handleReset = () => {
     initializeSimulator();
+    setCustomGatePlan([]);
+    setPendingTwoQubitGate(null);
   };
 
   const handleAddCustomGate = (step: CustomGateStep) => {
@@ -230,11 +244,17 @@ const App: React.FC = () => {
         mode: 'exact-count',
         exactCount: errorCount
       },
-      gateErrorConfig
+      // Gate errors disabled for initialization
+      gateErrorConfig: {
+        enabled: false,
+        type: 'none',
+        probability: 0,
+        applyTo: 'all'
+      }
     };
     const sim = new QECSimulator(config);
     sim.initialize();
-    sim.encode();
+    // No need to call encode() - it's already done in initialize()
     sim.applyCustomCircuit(customGatePlan);
     setSimulator(sim);
     setPhase(sim.getPhase());
@@ -460,11 +480,8 @@ const App: React.FC = () => {
                       numQubits={numQubits}
                       steps={simulator.getHistory()}
                       currentStep={currentStep}
-                      qubitLabels={
-                        codeType === 'repetition'
-                          ? ['q0', 'q1', 'q2', 'a0', 'a1']
-                          : Array.from({ length: numQubits }, (_, i) => `q${i}`)
-                      }
+                      qubitLabels={simulator.getState().system.qubits.map(q => q.label)}
+                      qubitRoles={simulator.getState().system.qubits.map(q => q.role)}
                       isDroppable={activeConfigTab === 'gate-error'}
                       onGateDrop={handleGateDrop}
                       pendingTwoQubitGate={pendingTwoQubitGate}
@@ -487,6 +504,7 @@ const App: React.FC = () => {
                 <TransformationView
                   steps={simulator.getHistory()}
                   currentStepIndex={simulator.getCurrentSnapshotIndex()}
+                  qubitLabels={simulator.getState().system.qubits.map(q => q.label)}
                 />
               )}
             </div>
@@ -708,9 +726,14 @@ const App: React.FC = () => {
               onClick={(e) => e.stopPropagation()}
               className="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-slate-700"
             >
-            <h3 className="text-lg font-semibold text-white mb-4">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-white">
               Настройка ошибок для {customGatePlan[selectedGateForErrorConfig].op.name}
             </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Кубиты: {customGatePlan[selectedGateForErrorConfig].op.qubits.map(q => `q${q}`).join(', ')}
+              </p>
+            </div>
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between text-sm text-slate-400 mb-2">
@@ -767,6 +790,17 @@ const App: React.FC = () => {
                 </div>
               </div>
               <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    if (selectedGateForErrorConfig !== null) {
+                      handleRemoveCustomGate(selectedGateForErrorConfig);
+                      setSelectedGateForErrorConfig(null);
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors font-medium"
+                >
+                  Удалить гейт
+                </button>
                 <button
                   onClick={() => setSelectedGateForErrorConfig(null)}
                   className="flex-1 px-4 py-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"

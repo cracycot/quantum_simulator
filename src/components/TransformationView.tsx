@@ -5,6 +5,7 @@ import './TransformationView.css';
 interface TransformationViewProps {
   steps: QuantumStep[];
   currentStepIndex?: number;
+  qubitLabels?: string[];
 }
 
 const ITEMS_PER_PAGE = 1;
@@ -51,7 +52,7 @@ function getBadgeLabel(step: QuantumStep, transformation: any): string {
   }
 }
 
-export function TransformationView({ steps, currentStepIndex = -1 }: TransformationViewProps) {
+export function TransformationView({ steps, currentStepIndex = -1, qubitLabels = [] }: TransformationViewProps) {
   // Фильтруем только шаги с трансформациями
   const transformationSteps = steps.filter(step => step.transformation);
   
@@ -156,7 +157,7 @@ export function TransformationView({ steps, currentStepIndex = -1 }: Transformat
                 <span className="operation-icon">{t.icon}</span>
                 <span className="operation-name">
                   {step.operation?.name || 'Операция'}
-                  {step.operation && ` → ${step.operation.qubits.map(q => `q${q}`).join(', ')}`}
+                  {step.operation && ` → ${step.operation.qubits.map(q => qubitLabels[q] || `q${q}`).join(', ')}`}
                 </span>
               </div>
 

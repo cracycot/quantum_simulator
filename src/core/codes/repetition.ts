@@ -67,7 +67,7 @@ export function measureSyndromeRepetition(system: QuantumSystem): [number, numbe
         { name: 'CNOT', qubits: [1, a0], label: 'CNOT₁→a₀ (syndrome)' }
       ],
       'Syndrome coupling for Z₀Z₁',
-      'gate'
+      'measurement'
     );
     const s1 = system.measureQubit(a0, 'Measure a₀ (Z): s₁ = parity(q₀,q₁)');
     // Reset ancilla to |0⟩ to keep state comparable for fidelity / next steps
@@ -82,7 +82,7 @@ export function measureSyndromeRepetition(system: QuantumSystem): [number, numbe
         { name: 'CNOT', qubits: [2, a1], label: 'CNOT₂→a₁ (syndrome)' }
       ],
       'Syndrome coupling for Z₁Z₂',
-      'gate'
+      'measurement'
     );
     const s2 = system.measureQubit(a1, 'Measure a₁ (Z): s₂ = parity(q₁,q₂)');
     if (s2 === 1) {
@@ -125,33 +125,31 @@ export function correctErrorRepetition(system: QuantumSystem, syndrome: [number,
   let correctedQubit: number | null = null;
   
   if (s1 === 0 && s2 === 0) {
-    system.logStep('correction', 'No error detected - no correction needed');
+    // No error detected
+    correctedQubit = null;
   } else if (s1 === 1 && s2 === 0) {
     // Error on q0
     system.applyGatesWithDescription(
       [{ name: 'X', qubits: [0], label: 'X₀' }],
-      '✅ Correction: apply X on q₀',
+      '✅ Коррекция: X на q₀',
       'correction'
     );
-    system.logStep('correction', 'Corrected X error on q₀');
     correctedQubit = 0;
   } else if (s1 === 1 && s2 === 1) {
     // Error on q1
     system.applyGatesWithDescription(
       [{ name: 'X', qubits: [1], label: 'X₁' }],
-      '✅ Correction: apply X on q₁',
+      '✅ Коррекция: X на q₁',
       'correction'
     );
-    system.logStep('correction', 'Corrected X error on q₁');
     correctedQubit = 1;
   } else if (s1 === 0 && s2 === 1) {
     // Error on q2
     system.applyGatesWithDescription(
       [{ name: 'X', qubits: [2], label: 'X₂' }],
-      '✅ Correction: apply X on q₂',
+      '✅ Коррекция: X на q₂',
       'correction'
     );
-    system.logStep('correction', 'Corrected X error on q₂');
     correctedQubit = 2;
   }
   

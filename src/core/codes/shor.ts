@@ -212,15 +212,27 @@ export function correctBitFlipErrors(
       corrections.push(`Блок ${blockIdx}: синдром (0,0) → ошибки нет`);
     } else if (s1 === 1 && s2 === 0) {
       // Perfect correction - no gate errors
-      system.applyGate({ name: 'X', qubits: [q0], label: `X${q0} (bit correction)` });
+      system.applyGatesWithDescription(
+        [{ name: 'X', qubits: [q0], label: `X${q0}` }],
+        `✅ Коррекция: X на q${q0}`,
+        'correction'
+      );
       corrected.push(q0);
       corrections.push(`Блок ${blockIdx}: синдром (1,0) → применить X к q${q0}`);
     } else if (s1 === 1 && s2 === 1) {
-      system.applyGate({ name: 'X', qubits: [q1], label: `X${q1} (bit correction)` });
+      system.applyGatesWithDescription(
+        [{ name: 'X', qubits: [q1], label: `X${q1}` }],
+        `✅ Коррекция: X на q${q1}`,
+        'correction'
+      );
       corrected.push(q1);
       corrections.push(`Блок ${blockIdx}: синдром (1,1) → применить X к q${q1}`);
     } else if (s1 === 0 && s2 === 1) {
-      system.applyGate({ name: 'X', qubits: [q2], label: `X${q2} (bit correction)` });
+      system.applyGatesWithDescription(
+        [{ name: 'X', qubits: [q2], label: `X${q2}` }],
+        `✅ Коррекция: X на q${q2}`,
+        'correction'
+      );
       corrected.push(q2);
       corrections.push(`Блок ${blockIdx}: синдром (0,1) → применить X к q${q2}`);
     }
@@ -264,7 +276,11 @@ export function correctPhaseFlipErrors(
       `\n🎉 Коррекция не требуется`;
   } else if (s1 === 1 && s2 === 0) {
     // Block 0 has wrong phase relative to others - perfect correction
-    system.applyGate({ name: 'Z', qubits: [0], label: 'Z₀ (phase correction)' });
+    system.applyGatesWithDescription(
+      [{ name: 'Z', qubits: [0], label: 'Z₀' }],
+      '✅ Коррекция: Z на q₀',
+      'correction'
+    );
     corrected.push(0);
     correctionDescription = `✅ КОРРЕКЦИЯ ФАЗОВЫХ ОШИБОК:\n` +
       `Синдром (1,0) → фазовая ошибка в блоке 0\n` +
@@ -273,7 +289,11 @@ export function correctPhaseFlipErrors(
       `Благодаря запутанности, коррекция одного кубита исправляет весь блок`;
   } else if (s1 === 1 && s2 === 1) {
     // Block 1 has wrong phase
-    system.applyGate({ name: 'Z', qubits: [3], label: 'Z₃ (phase correction)' });
+    system.applyGatesWithDescription(
+      [{ name: 'Z', qubits: [3], label: 'Z₃' }],
+      '✅ Коррекция: Z на q₃',
+      'correction'
+    );
     corrected.push(3);
     correctionDescription = `✅ КОРРЕКЦИЯ ФАЗОВЫХ ОШИБОК:\n` +
       `Синдром (1,1) → фазовая ошибка в блоке 1\n` +
@@ -282,7 +302,11 @@ export function correctPhaseFlipErrors(
       `Благодаря запутанности, коррекция одного кубита исправляет весь блок`;
   } else if (s1 === 0 && s2 === 1) {
     // Block 2 has wrong phase
-    system.applyGate({ name: 'Z', qubits: [6], label: 'Z₆ (phase correction)' });
+    system.applyGatesWithDescription(
+      [{ name: 'Z', qubits: [6], label: 'Z₆' }],
+      '✅ Коррекция: Z на q₆',
+      'correction'
+    );
     corrected.push(6);
     correctionDescription = `✅ КОРРЕКЦИЯ ФАЗОВЫХ ОШИБОК:\n` +
       `Синдром (0,1) → фазовая ошибка в блоке 2\n` +

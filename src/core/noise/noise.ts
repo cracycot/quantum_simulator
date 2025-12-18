@@ -25,7 +25,7 @@ export interface NoiseEvent {
  */
 export function applyBitFlip(system: QuantumSystem, qubitIndex: number, probability: number): boolean {
   if (Math.random() < probability) {
-    system.applyGate({ name: 'X', qubits: [qubitIndex], label: `X${qubitIndex} (noise)` });
+    system.applyGate({ name: 'X', qubits: [qubitIndex], label: `X${qubitIndex} (noise)` }, 'noise');
     system.logStep('noise', `Bit-flip error on qubit ${qubitIndex}`);
     return true;
   }
@@ -37,7 +37,7 @@ export function applyBitFlip(system: QuantumSystem, qubitIndex: number, probabil
  */
 export function applyPhaseFlip(system: QuantumSystem, qubitIndex: number, probability: number): boolean {
   if (Math.random() < probability) {
-    system.applyGate({ name: 'Z', qubits: [qubitIndex], label: `Z${qubitIndex} (noise)` });
+    system.applyGate({ name: 'Z', qubits: [qubitIndex], label: `Z${qubitIndex} (noise)` }, 'noise');
     system.logStep('noise', `Phase-flip error on qubit ${qubitIndex}`);
     return true;
   }
@@ -49,7 +49,7 @@ export function applyPhaseFlip(system: QuantumSystem, qubitIndex: number, probab
  */
 export function applyBitPhaseFlip(system: QuantumSystem, qubitIndex: number, probability: number): boolean {
   if (Math.random() < probability) {
-    system.applyGate({ name: 'Y', qubits: [qubitIndex], label: `Y${qubitIndex} (noise)` });
+    system.applyGate({ name: 'Y', qubits: [qubitIndex], label: `Y${qubitIndex} (noise)` }, 'noise');
     system.logStep('noise', `Bit-phase-flip (Y) error on qubit ${qubitIndex}`);
     return true;
   }
@@ -65,15 +65,15 @@ export function applyDepolarizing(system: QuantumSystem, qubitIndex: number, pro
   const r = Math.random();
   
   if (r < probability / 3) {
-    system.applyGate({ name: 'X', qubits: [qubitIndex], label: `X${qubitIndex} (depolarizing)` });
+    system.applyGate({ name: 'X', qubits: [qubitIndex], label: `X${qubitIndex} (depolarizing)` }, 'noise');
     system.logStep('noise', `Depolarizing X error on qubit ${qubitIndex}`);
     return 'X';
   } else if (r < 2 * probability / 3) {
-    system.applyGate({ name: 'Y', qubits: [qubitIndex], label: `Y${qubitIndex} (depolarizing)` });
+    system.applyGate({ name: 'Y', qubits: [qubitIndex], label: `Y${qubitIndex} (depolarizing)` }, 'noise');
     system.logStep('noise', `Depolarizing Y error on qubit ${qubitIndex}`);
     return 'Y';
   } else if (r < probability) {
-    system.applyGate({ name: 'Z', qubits: [qubitIndex], label: `Z${qubitIndex} (depolarizing)` });
+    system.applyGate({ name: 'Z', qubits: [qubitIndex], label: `Z${qubitIndex} (depolarizing)` }, 'noise');
     system.logStep('noise', `Depolarizing Z error on qubit ${qubitIndex}`);
     return 'Z';
   }
@@ -86,20 +86,23 @@ export function applyDepolarizing(system: QuantumSystem, qubitIndex: number, pro
  */
 export function applyNoise(system: QuantumSystem, config: NoiseConfig): NoiseEvent[] {
   const events: NoiseEvent[] = [];
-  const qubits = config.targetQubits ?? Array.from({ length: system.numQubits }, (_, i) => i);
+  // Filter out ancilla qubits - they should not have noise applied to them
+  const allQubits = config.targetQubits ?? Array.from({ length: system.numQubits }, (_, i) => i);
+  const qubits = allQubits.filter(i => system.qubits[i]?.role === 'data');
   const mode = config.mode ?? 'probability';
   
   if (config.type === 'none') {
     // No noise - return empty events
-    return qubits.map(q => ({ qubitIndex: q, errorType: 'none' as const, applied: false }));
+    return allQubits.map(q => ({ qubitIndex: q, errorType: 'none' as const, applied: false }));
   }
   
   if (mode === 'exact-count' && config.exactCount !== undefined) {
-    // Exact count mode: apply errors to exactly N random qubits
+    // Exact count mode: apply errors to exactly N random qubits (data qubits only)
     const count = Math.min(config.exactCount, qubits.length);
     const shuffled = [...qubits].sort(() => Math.random() - 0.5);
     const selectedQubits = new Set(shuffled.slice(0, count));
     
+    // Apply noise to data qubits
     for (const qubitIndex of qubits) {
       if (selectedQubits.has(qubitIndex)) {
         // Apply error to this qubit (probability = 1)
@@ -127,8 +130,15 @@ export function applyNoise(system: QuantumSystem, config: NoiseConfig): NoiseEve
         events.push({ qubitIndex, errorType: 'none', applied: false });
       }
     }
+    
+    // Add events for ancilla qubits (no noise applied)
+    for (const qubitIndex of allQubits) {
+      if (system.qubits[qubitIndex]?.role !== 'data') {
+        events.push({ qubitIndex, errorType: 'none', applied: false });
+      }
+    }
   } else {
-    // Probability mode: each qubit independently has probability p of error
+    // Probability mode: each qubit independently has probability p of error (data qubits only)
     for (const qubitIndex of qubits) {
       let errorType: NoiseEvent['errorType'] = 'none';
       let applied = false;
@@ -157,6 +167,13 @@ export function applyNoise(system: QuantumSystem, config: NoiseConfig): NoiseEve
       
       events.push({ qubitIndex, errorType, applied });
     }
+    
+    // Add events for ancilla qubits (no noise applied)
+    for (const qubitIndex of allQubits) {
+      if (system.qubits[qubitIndex]?.role !== 'data') {
+        events.push({ qubitIndex, errorType: 'none', applied: false });
+      }
+    }
   }
   
   return events;
@@ -174,7 +191,7 @@ export function injectError(
     name: errorType, 
     qubits: [qubitIndex], 
     label: `${errorType}${qubitIndex} (injected)` 
-  });
+  }, 'noise');
   system.logStep('noise', `Manually injected ${errorType} error on qubit ${qubitIndex}`);
 }
 

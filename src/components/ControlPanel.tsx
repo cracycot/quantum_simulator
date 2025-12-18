@@ -9,7 +9,8 @@ import {
   SkipBack, 
   SkipForward, 
   Shield,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react';
 import type { CodeType, LogicalState, SimulationPhase } from '../core/simulator';
 import type { NoiseType } from '../core/noise/noise';
@@ -247,7 +248,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           <div className="space-y-4">
             {/* Палитра гейтов (draggable) */}
             <div className="space-y-3">
+              <div className="flex items-center justify-between">
               <div className="text-sm text-slate-300 font-medium">Палитра гейтов</div>
+                {perGateErrorProb > 0 && (
+                  <div className="px-2 py-0.5 bg-red-500/30 border border-red-500/50 rounded text-xs text-red-200 font-mono">
+                    ⚠️ {perGateErrorProb.toFixed(0)}%
+                  </div>
+                )}
+              </div>
               <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
                 <p className="text-xs text-cyan-300">
                   💡 <strong>Перетащите гейт на линию нужного кубита</strong> (q0, q1, q2)
@@ -295,6 +303,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 ))}
               </div>
             </div>
+
+            {/* Предупреждение о активных ошибках гейтов */}
+            {perGateErrorProb > 0 && (
+              <div className="p-2 bg-orange-500/20 border border-orange-500/40 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-orange-400 flex-shrink-0" />
+                  <p className="text-xs text-orange-200">
+                    <strong>Ошибки гейтов активны!</strong> Каждый добавленный гейт будет иметь {perGateErrorProb.toFixed(0)}% вероятность ошибки
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Настройки ошибок по умолчанию */}
             <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg">
@@ -400,6 +420,21 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   Dep
                 </button>
               </div>
+              {/* Кнопка сброса настроек ошибок */}
+              {perGateErrorProb > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onGateErrorConfigChange({ 
+                    enabled: false,
+                    type: 'depolarizing',
+                    probability: 0.0,
+                    applyTo: 'all'
+                  })}
+                  className="w-full px-2 py-1.5 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-600 text-xs transition-colors"
+                >
+                  🔄 Сбросить вероятность в 0%
+                </button>
+              )}
             </div>
 
             {/* Информация о схеме */}
@@ -420,15 +455,16 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     onClick={() => onClearCustomGatePlan()}
                     className="px-2 py-1 rounded bg-red-500/30 text-red-300 hover:bg-red-500/40 text-xs disabled:opacity-40"
                     disabled={customGatePlan.length === 0}
+                    title="Очистить все гейты"
                   >
-                    ✕
+                    🗑️ Очистить
                   </button>
                 </div>
               </div>
               <p className="text-xs text-slate-500">
                 {customGatePlan.length === 0 
                   ? 'Перетащите гейты на схему справа'
-                  : '💡 Кликните на гейт для настройки ошибок'}
+                  : `💡 Кликните на гейт для настройки или удаления (${customGatePlan.length} ${customGatePlan.length === 1 ? 'гейт' : 'гейтов'})`}
               </p>
             </div>
 
@@ -473,6 +509,16 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           ) : (
             <Play className="w-6 h-6 ml-0.5" />
           )}
+        </motion.button>
+        
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onReset}
+          className="p-3 rounded-full bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+          title="Сброс (начать заново)"
+        >
+          <RotateCcw className="w-5 h-5" />
         </motion.button>
         
         <motion.button

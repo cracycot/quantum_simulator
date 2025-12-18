@@ -347,7 +347,9 @@ export class QuantumSystem {
       const prob = amp.absSquared();
       
       if (prob > 0.001) {
-        const basis = i.toString(2).padStart(state.numQubits, '0');
+        // Reverse bit order for more intuitive display (q0,q1,q2,q3,q4 from left to right)
+        const basisBinary = i.toString(2).padStart(state.numQubits, '0');
+        const basis = basisBinary.split('').reverse().join('');
         const coeff = amp.abs();
         const phase = Math.atan2(amp.im, amp.re);
         significant.push({ basis, coeff, phase });
@@ -471,8 +473,12 @@ export class QuantumSystem {
 
   /**
    * Apply a quantum gate
+   * NOTE: This method does NOT automatically apply gate errors.
+   * Gate errors are only applied when using applyGatesWithDescription() with type='gate'
+   * @param op - The gate operation to apply
+   * @param type - The type of step (default: 'gate'). Use 'noise' for noise, 'correction' for corrections
    */
-  applyGate(op: GateOperation): void {
+  applyGate(op: GateOperation, type: QuantumStep['type'] = 'gate'): void {
     const stateBefore = this.state.clone();
     applyGateInternal(this.state, op);
     const stateAfter = this.state.clone();
@@ -487,7 +493,7 @@ export class QuantumSystem {
     const transformation = this.generateTransformation(op, stateBefore, stateAfter);
     
     this.history.push({
-      type: 'gate',
+      type,
       operation: op,
       description,
       stateBefore,
@@ -496,8 +502,8 @@ export class QuantumSystem {
       latex,
       transformation
     });
-
-    this.applyGateErrorIfNeeded(op.qubits, op.name);
+    
+    // Gate errors are NOT applied here - only in applyGatesWithDescription() with type='gate'
   }
   
   /**
@@ -557,8 +563,10 @@ export class QuantumSystem {
       
       console.log('[QuantumSystem] Added to history, new length:', this.history.length);
       
-      // Apply gate errors after each gate if configured
-      this.applyGateErrorIfNeeded(op.qubits, op.name);
+      // Apply gate errors ONLY for user gates (type='gate'), NOT for initialization (type='encode')
+      if (type === 'gate') {
+        this.applyGateErrorIfNeeded(op.qubits, op.name);
+      }
     }
   }
 

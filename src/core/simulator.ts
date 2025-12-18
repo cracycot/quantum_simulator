@@ -298,8 +298,8 @@ export class QECSimulator {
       });
     }
     
-    // Apply the gate (system.applyGate handles error injection internally)
-    system.applyGate(step.op);
+    // Apply the gate using applyGatesWithDescription with type='gate' to enable gate errors
+    system.applyGatesWithDescription([step.op], `User gate: ${step.op.name}`, 'gate');
     
     // Restore original gate error config
     system.setGateErrorConfig(originalCfg);
@@ -324,17 +324,13 @@ export class QECSimulator {
       const syndrome = measureSyndromeRepetition(system);
       this.state.syndrome = syndrome;
       // Syndrome measurement is now performed via ancillas and already recorded as measurement steps.
-      // Avoid adding an extra generic measurement step that would create a misleading marker on the circuit.
-      system.logStep('encode', `Синдром измерен: (${syndrome[0]}, ${syndrome[1]})`);
       
       // Apply correction based on syndrome
       const correctedQubit = correctErrorRepetition(system, syndrome as [number, number]);
       if (correctedQubit !== null) {
         this.state.correctedQubits = [correctedQubit];
-        system.logStep('correction', `Коррекция: применён X к q${correctedQubit}`);
       } else {
         this.state.correctedQubits = [];
-        system.logStep('correction', 'Синдром (0,0) — ошибок не обнаружено');
       }
     } else {
       // Shor code
