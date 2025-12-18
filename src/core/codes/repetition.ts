@@ -128,17 +128,29 @@ export function correctErrorRepetition(system: QuantumSystem, syndrome: [number,
     system.logStep('correction', 'No error detected - no correction needed');
   } else if (s1 === 1 && s2 === 0) {
     // Error on q0
-    system.applyGate({ name: 'X', qubits: [0], label: 'X₀ (correction)' });
+    system.applyGatesWithDescription(
+      [{ name: 'X', qubits: [0], label: 'X₀' }],
+      '✅ Correction: apply X on q₀',
+      'correction'
+    );
     system.logStep('correction', 'Corrected X error on q₀');
     correctedQubit = 0;
   } else if (s1 === 1 && s2 === 1) {
     // Error on q1
-    system.applyGate({ name: 'X', qubits: [1], label: 'X₁ (correction)' });
+    system.applyGatesWithDescription(
+      [{ name: 'X', qubits: [1], label: 'X₁' }],
+      '✅ Correction: apply X on q₁',
+      'correction'
+    );
     system.logStep('correction', 'Corrected X error on q₁');
     correctedQubit = 1;
   } else if (s1 === 0 && s2 === 1) {
     // Error on q2
-    system.applyGate({ name: 'X', qubits: [2], label: 'X₂ (correction)' });
+    system.applyGatesWithDescription(
+      [{ name: 'X', qubits: [2], label: 'X₂' }],
+      '✅ Correction: apply X on q₂',
+      'correction'
+    );
     system.logStep('correction', 'Corrected X error on q₂');
     correctedQubit = 2;
   }

@@ -72,10 +72,11 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
       // Skip auto-applied gate steps like "Apply X1 (noise)..." or "Apply X₁ (correction)..."
       // They are not user operations and duplicate the NOISE/ERROR + CORRECTION events.
       const isAutoAppliedGate =
-        desc.includes('(noise)') ||
+        step.type === 'gate' &&
+        (desc.includes('(noise)') ||
         desc.includes('(correction)') ||
         desc.includes(' (noise') ||
-        desc.includes(' (correction');
+        desc.includes(' (correction'));
       if (isAutoAppliedGate) {
         return;
       }
@@ -112,6 +113,12 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
       // Only show noise, correction, and other non-gate steps that have visual meaning
       if (step.type === 'encode' || step.type === 'decode') {
         // Skip these - they're represented by phase labels, не увеличиваем column
+        return;
+      }
+
+      // Correction steps without an explicit operation are just explanations,
+      // the actual correction is shown as an operation step (type 'correction' with operation).
+      if (step.type === 'correction') {
         return;
       }
       
@@ -790,10 +797,40 @@ function generatePhaseLabels(
   stepToColumnMap: Map<number, number>
 ): Array<{ name: string; start: number; end: number; color: string; centerX: number; startX: number; endX: number }> {
   const phases: Array<{ name: string; start: number; end: number; color: string }> = [];
-  let currentPhase: string | null = null;
-  let phaseStartColumn: number | null = null;
-  let phaseEndColumn: number | null = null;
-  let initCreated = false; // Флаг для отслеживания создания INIT блока
+  // INIT phase should always be visible and should span the whole initialization prefix
+  // (in our simulator, init/encoding gates are logged as type 'encode' at the beginning).
+  const INIT_NAME = 'INIT\n|0⟩';
+  let initEndColumn = 0;
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const desc = step.description.toLowerCase();
+
+    // Skip auto-applied gate-steps
+    const isAutoAppliedGate =
+      step.type === 'gate' &&
+      (desc.includes('(noise)') ||
+        desc.includes('(correction)') ||
+        desc.includes(' (noise') ||
+        desc.includes(' (correction'));
+    if (isAutoAppliedGate) continue;
+
+    const col = stepToColumnMap.get(i);
+    if (col === undefined) continue;
+
+    if (step.type === 'encode') {
+      initEndColumn = Math.max(initEndColumn, col);
+      continue;
+    }
+
+    // Stop once we hit the first visible non-encode step
+    break;
+  }
+
+  phases.push({ name: INIT_NAME, start: 0, end: initEndColumn, color: '#22c55e' });
+  let currentPhase: string | null = INIT_NAME;
+  let phaseStartColumn: number | null = 0;
+  let phaseEndColumn: number | null = initEndColumn;
+  let initCreated = true; // INIT already created above
   
   steps.forEach((step, stepIdx) => {
     let phaseName = '';
