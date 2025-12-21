@@ -26,7 +26,6 @@ export interface NoiseEvent {
 export function applyBitFlip(system: QuantumSystem, qubitIndex: number, probability: number): boolean {
   if (Math.random() < probability) {
     system.applyGate({ name: 'X', qubits: [qubitIndex], label: `X${qubitIndex} (noise)` }, 'noise');
-    system.logStep('noise', `Bit-flip error on qubit ${qubitIndex}`);
     return true;
   }
   return false;
@@ -38,7 +37,6 @@ export function applyBitFlip(system: QuantumSystem, qubitIndex: number, probabil
 export function applyPhaseFlip(system: QuantumSystem, qubitIndex: number, probability: number): boolean {
   if (Math.random() < probability) {
     system.applyGate({ name: 'Z', qubits: [qubitIndex], label: `Z${qubitIndex} (noise)` }, 'noise');
-    system.logStep('noise', `Phase-flip error on qubit ${qubitIndex}`);
     return true;
   }
   return false;
@@ -50,7 +48,6 @@ export function applyPhaseFlip(system: QuantumSystem, qubitIndex: number, probab
 export function applyBitPhaseFlip(system: QuantumSystem, qubitIndex: number, probability: number): boolean {
   if (Math.random() < probability) {
     system.applyGate({ name: 'Y', qubits: [qubitIndex], label: `Y${qubitIndex} (noise)` }, 'noise');
-    system.logStep('noise', `Bit-phase-flip (Y) error on qubit ${qubitIndex}`);
     return true;
   }
   return false;
@@ -66,15 +63,12 @@ export function applyDepolarizing(system: QuantumSystem, qubitIndex: number, pro
   
   if (r < probability / 3) {
     system.applyGate({ name: 'X', qubits: [qubitIndex], label: `X${qubitIndex} (depolarizing)` }, 'noise');
-    system.logStep('noise', `Depolarizing X error on qubit ${qubitIndex}`);
     return 'X';
   } else if (r < 2 * probability / 3) {
     system.applyGate({ name: 'Y', qubits: [qubitIndex], label: `Y${qubitIndex} (depolarizing)` }, 'noise');
-    system.logStep('noise', `Depolarizing Y error on qubit ${qubitIndex}`);
     return 'Y';
   } else if (r < probability) {
     system.applyGate({ name: 'Z', qubits: [qubitIndex], label: `Z${qubitIndex} (depolarizing)` }, 'noise');
-    system.logStep('noise', `Depolarizing Z error on qubit ${qubitIndex}`);
     return 'Z';
   }
   
@@ -192,7 +186,6 @@ export function injectError(
     qubits: [qubitIndex], 
     label: `${errorType}${qubitIndex} (injected)` 
   }, 'noise');
-  system.logStep('noise', `Manually injected ${errorType} error on qubit ${qubitIndex}`);
 }
 
 /**

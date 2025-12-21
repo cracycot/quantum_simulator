@@ -186,7 +186,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 onActiveConfigTabChange('gate-error');
               }}
             >
-              ⚡ Ошибки гейтов
+              🎨 Палитра гейтов
             </button>
           </div>
         </div>
@@ -441,30 +441,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             <div className="space-y-2 p-2 bg-slate-800/30 rounded-lg">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-slate-400">Схема: {customGatePlan.length} гейтов</span>
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onRunCustomGatePlan()}
-                    className="px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-500 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                    disabled={customGatePlan.length === 0}
-                  >
-                    ⚡ Применить
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onClearCustomGatePlan()}
-                    className="px-2 py-1 rounded bg-red-500/30 text-red-300 hover:bg-red-500/40 text-xs disabled:opacity-40"
-                    disabled={customGatePlan.length === 0}
-                    title="Очистить все гейты"
-                  >
-                    🗑️ Очистить
-                  </button>
-                </div>
               </div>
+              
               <p className="text-xs text-slate-500">
                 {customGatePlan.length === 0 
-                  ? 'Перетащите гейты на схему справа'
-                  : `💡 Кликните на гейт для настройки или удаления (${customGatePlan.length} ${customGatePlan.length === 1 ? 'гейт' : 'гейтов'})`}
+                  ? 'Перетащите гейты на схему справа, затем нажмите ▶ Play'
+                  : `✅ ${customGatePlan.length} ${customGatePlan.length === 1 ? 'гейт' : customGatePlan.length < 5 ? 'гейта' : 'гейтов'} готово! Нажмите ▶ Play для применения`}
               </p>
             </div>
 
@@ -502,7 +484,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           whileTap={{ scale: 0.95 }}
           onClick={isPlaying ? onPause : onPlay}
           className="p-4 rounded-full text-white shadow-lg transition-shadow bg-gradient-to-r from-cyan-500 to-blue-500 shadow-cyan-500/25 hover:shadow-cyan-500/50"
-          title={isPlaying ? 'Пауза' : 'Запустить моделирование'}
+          title={isPlaying ? 'Пауза' : (customGatePlan.length > 0 ? `Применить ${customGatePlan.length} ${customGatePlan.length === 1 ? 'гейт' : 'гейта'} и запустить коррекцию` : 'Запустить стандартную симуляцию с шумом')}
         >
           {isPlaying ? (
             <Pause className="w-6 h-6" />

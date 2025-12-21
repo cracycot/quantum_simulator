@@ -235,6 +235,11 @@ export class QECSimulator {
     const appliedNoiseErrors = noiseEvents.filter(e => e.applied);
     const totalErrors = gateErrors.length + appliedNoiseErrors.length;
     
+    // Log warning BEFORE attempting correction if too many errors
+    if (totalErrors > 1 && config.codeType === 'repetition') {
+      system.logStep('measurement', `⚠️ Обнаружено ${totalErrors} ошибок (gate errors: ${gateErrors.length}, шум: ${appliedNoiseErrors.length}). 3-кубитный код может исправить только 1 ошибку!`);
+    }
+    
     if (config.codeType === 'repetition') {
       const result = correctErrorRepetition(system, syndrome as [number, number]);
       if (result !== null) {
@@ -245,10 +250,10 @@ export class QECSimulator {
       if (totalErrors >= 2) {
         if (syndrome[0] === 0 && syndrome[1] === 0) {
           // 3 errors: all qubits flipped, looks like valid codeword
-          system.logStep('correction', `⚠️ Логическая ошибка: ${totalErrors} ошибок (${gateErrors.length} gate + ${appliedNoiseErrors.length} noise) вызвали необнаруживаемый переход состояния`);
+          system.logStep('correction', `⚠️ Логическая ошибка: ${totalErrors} ошибок вызвали необнаруживаемый переход состояния (синдром (0,0) ложный)`);
         } else {
           // 2 errors: syndrome points to wrong qubit, correction makes it worse
-          system.logStep('correction', `⚠️ Неправильная коррекция: ${totalErrors} ошибок (${gateErrors.length} gate + ${appliedNoiseErrors.length} noise) превышают возможности кода (исправляется только 1 ошибка)`);
+          system.logStep('correction', `⚠️ Неправильная коррекция: ${totalErrors} ошибок превышают возможности кода — исправлен неверный кубит!`);
         }
       } else if (correctedQubits.length === 0) {
         system.logStep('correction', 'Ошибок не обнаружено - коррекция не требуется');
@@ -260,7 +265,7 @@ export class QECSimulator {
       
       // Check for Shor code correction limits
       if (totalErrors >= 2) {
-        system.logStep('correction', `⚠️ ${totalErrors} ошибок (${gateErrors.length} gate + ${appliedNoiseErrors.length} noise) могут превышать возможности коррекции`);
+        system.logStep('correction', `⚠️ ${totalErrors} ошибок могут превышать возможности коррекции`);
       }
     }
     
@@ -273,8 +278,9 @@ export class QECSimulator {
   /**
    * Apply a single custom gate with optional gate-error override
    * This follows the mathematical model:
+   * - Gate operation is applied intentionally (NOT an error)
    * - With probability (1-p): only apply gate G
-   * - With probability p: apply gate G, then error E
+   * - With probability p: apply gate G, then error E (THIS is an error that needs correction)
    */
   applyCustomGate(step: CustomGateStep): void {
     const { system, config } = this.state;
@@ -308,44 +314,166 @@ export class QECSimulator {
   }
 
   /**
-   * Apply a full custom circuit (sequence of gates)
-   * After all gates, performs syndrome measurement and correction
+   * Apply a full custom circuit (sequence of gates) with optional noise
+   * Always measures syndrome for educational purposes
+   * Applies correction if gate errors OR noise occurred
    */
-  applyCustomCircuit(plan: CustomGateStep[]): void {
+  applyCustomCircuit(plan: CustomGateStep[], applyNoiseAfter: boolean = false): void {
     const { system, config } = this.state;
+    
+    // Track gate errors before applying gates
+    const gateErrorsCountBefore = system.history.filter(s => s.type === 'gate-error').length;
+    
+    // Calculate expected syndrome after user gates (for repetition code)
+    let expectedSyndrome: [number, number] = [0, 0];
+    if (config.codeType === 'repetition') {
+      for (const step of plan) {
+        const gateName = step.op.name;
+        const qubit = step.op.qubits[0];
+        
+        // X, Y, Rx, Ry change bit-flip syndrome
+        if (gateName === 'X' || gateName === 'Y' || gateName === 'Rx' || gateName === 'Ry') {
+          if (qubit === 0) {
+            expectedSyndrome[0] ^= 1; // s_exp ⊕ (1,0)
+          } else if (qubit === 1) {
+            expectedSyndrome[0] ^= 1; // s_exp ⊕ (1,1)
+            expectedSyndrome[1] ^= 1;
+          } else if (qubit === 2) {
+            expectedSyndrome[1] ^= 1; // s_exp ⊕ (0,1)
+          }
+        }
+        // H also changes syndrome
+        else if (gateName === 'H') {
+          if (qubit === 0) {
+            expectedSyndrome[0] ^= 1;
+          } else if (qubit === 1) {
+            expectedSyndrome[0] ^= 1;
+            expectedSyndrome[1] ^= 1;
+          } else if (qubit === 2) {
+            expectedSyndrome[1] ^= 1;
+          }
+        }
+      }
+    }
+    
+    console.log('[Simulator] Expected syndrome after user gates:', expectedSyndrome);
     
     // Apply each gate in sequence
     for (const step of plan) {
       this.applyCustomGate(step);
     }
     
-    // After all custom gates, perform syndrome measurement
+    // Apply noise after user gates if requested
+    if (applyNoiseAfter && config.noiseConfig.exactCount && config.noiseConfig.exactCount > 0) {
+      console.log('[Simulator] Applying noise after custom gates:', config.noiseConfig);
+      this.applyNoise();
+    }
+    
+    // Check if any gate errors occurred during gate application
+    const gateErrorsCountAfter = system.history.filter(s => s.type === 'gate-error').length;
+    const hadGateErrors = gateErrorsCountAfter > gateErrorsCountBefore;
+    const gateErrorsCount = gateErrorsCountAfter - gateErrorsCountBefore;
+    
+    // Check if noise was applied
+    const noiseApplied = this.state.noiseEvents.filter(e => e.applied).length > 0;
+    const noiseErrorsCount = this.state.noiseEvents.filter(e => e.applied).length;
+    
+    // Calculate total errors
+    const totalErrorsCount = gateErrorsCount + noiseErrorsCount;
+    const canCorrectAllErrors = totalErrorsCount <= 1; // Repetition code corrects only 1 error
+    
+    console.log('[Simulator] ===== ERROR COUNT SUMMARY =====');
+    console.log('[Simulator] Gate errors:', gateErrorsCount);
+    console.log('[Simulator] Noise errors:', noiseErrorsCount);
+    console.log('[Simulator] Total errors:', totalErrorsCount);
+    console.log('[Simulator] Can correct all?', canCorrectAllErrors);
+    console.log('[Simulator] ==============================');
+    
+    // ALWAYS measure syndrome (for educational purposes)
     if (config.codeType === 'repetition') {
-      const syndrome = measureSyndromeRepetition(system);
-      this.state.syndrome = syndrome;
-      // Syndrome measurement is now performed via ancillas and already recorded as measurement steps.
+      const measuredSyndrome = measureSyndromeRepetition(system);
+      this.state.syndrome = measuredSyndrome;
       
-      // Apply correction based on syndrome
-      const correctedQubit = correctErrorRepetition(system, syndrome as [number, number]);
-      if (correctedQubit !== null) {
-        this.state.correctedQubits = [correctedQubit];
+      // Calculate ERROR syndrome (measured XOR expected)
+      const errorSyndrome: [number, number] = [
+        measuredSyndrome[0] ^ expectedSyndrome[0],
+        measuredSyndrome[1] ^ expectedSyndrome[1]
+      ];
+      
+      console.log('[Simulator] Measured syndrome:', measuredSyndrome, 
+                  'Expected:', expectedSyndrome,
+                  'Error syndrome:', errorSyndrome);
+      
+      // Determine if correction is needed based on ERROR syndrome
+      const syndromeIndicatesError = errorSyndrome[0] !== 0 || errorSyndrome[1] !== 0;
+      const needsCorrection = hadGateErrors || noiseApplied || syndromeIndicatesError;
+      
+      console.log('[Simulator] needsCorrection:', needsCorrection, 
+                  'hadGateErrors:', hadGateErrors, 'noiseApplied:', noiseApplied, 'syndromeIndicatesError:', syndromeIndicatesError);
+      
+      if (needsCorrection) {
+        // ALWAYS log what we're correcting
+        if (totalErrorsCount > 1) {
+          // Too many errors - log prominent warning
+          system.logStep('correction', `⚠️ ОБНАРУЖЕНО ${totalErrorsCount} ОШИБОК (gate errors: ${gateErrorsCount}, шум: ${noiseErrorsCount})! 3-кубитный код может исправить только 1 ошибку. Коррекция будет неполной!`);
+        } else if (hadGateErrors && noiseApplied) {
+          system.logStep('correction', `🔧 Обнаружены ошибки: ${gateErrorsCount} gate error + ${noiseErrorsCount} шум (всего ${totalErrorsCount}). Применяем коррекцию...`);
+        } else if (hadGateErrors) {
+          system.logStep('correction', `🔧 Обнаружена gate error (${gateErrorsCount}). Применяем коррекцию...`);
+        } else if (noiseApplied) {
+          system.logStep('correction', `🔧 Обнаружен шум (${noiseErrorsCount}). Применяем коррекцию...`);
+        }
+        
+        console.log(`[Simulator] Applying correction for error syndrome:`, errorSyndrome);
+        
+        // Pass ERROR syndrome to correction, not measured syndrome
+        const correctedQubit = correctErrorRepetition(system, errorSyndrome);
+        if (correctedQubit !== null) {
+          this.state.correctedQubits = [correctedQubit];
+          system.logStep('correction', `✅ Применена коррекция X на q${correctedQubit}`);
+        } else {
+          this.state.correctedQubits = [];
+        }
+        this.state.phase = 'correction';
       } else {
-        this.state.correctedQubits = [];
+        // No gate errors or noise - syndrome shows only intentional changes from user gates
+        console.log('[Simulator] Error syndrome is (0,0), no correction needed');
+        if (measuredSyndrome[0] === 0 && measuredSyndrome[1] === 0) {
+          system.logStep('correction', `✅ Синдром: (0, 0) - состояние корректно (без gate errors и шума)`);
+        } else {
+          system.logStep('correction', `ℹ️ Измеренный синдром: (${measuredSyndrome[0]}, ${measuredSyndrome[1]}), ожидаемый: (${expectedSyndrome[0]}, ${expectedSyndrome[1]}) → error: (0,0) - нет ошибок`);
+        }
+        this.state.phase = 'complete';
       }
     } else {
       // Shor code
       const result = measureAndCorrectShor(system);
       this.state.syndrome = [...result.bitFlipSyndrome, ...result.phaseFlipSyndrome];
-      this.state.correctedQubits = [...result.bitCorrected, ...result.phaseCorrected];
+      
+      // For Shor code, check syndrome
+      const syndromeIndicatesError = this.state.syndrome.some(s => s !== 0);
+      const needsCorrection = hadGateErrors || noiseApplied || syndromeIndicatesError;
+      
+      if (needsCorrection) {
+        console.log(`[Simulator] Errors detected (gate errors: ${hadGateErrors}, noise: ${noiseApplied}), correction applied`);
+        this.state.correctedQubits = [...result.bitCorrected, ...result.phaseCorrected];
+        this.state.phase = 'correction';
+      } else {
+        console.log('[Simulator] Syndrome measured, no errors detected');
+        system.logStep('correction', `ℹ️ Синдром измерен, изменено пользовательскими операциями`);
+        this.state.phase = 'complete';
+      }
     }
     
-    this.state.phase = 'correction';
     this.saveSnapshot();
     
-    // Calculate and log fidelity
+    // Calculate and log fidelity with ORIGINAL logical state (for reference)
     const targetState = this.getTargetState();
     const finalFidelity = system.state.fidelity(targetState);
-    system.logStep('decode', `Fidelity с целевым состоянием: ${(finalFidelity * 100).toFixed(2)}%`);
+    
+    // Check if any correction was applied
+    const correctionApplied = this.state.phase === 'correction';
+    system.logStep('decode', `📊 Fidelity с изначальным |0⟩_L: ${(finalFidelity * 100).toFixed(2)}%${correctionApplied ? ' (после коррекции)' : ' (изменено операциями)'}`);
     
     this.state.phase = 'complete';
     this.saveSnapshot();

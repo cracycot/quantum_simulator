@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { QuantumStep } from '../core/quantum/system';
 import './TransformationView.css';
 
@@ -8,10 +8,15 @@ interface TransformationViewProps {
   qubitLabels?: string[];
 }
 
-const ITEMS_PER_PAGE = 1;
+const ITEMS_PER_PAGE = 3;
 
 // Determine badge type based on effect
 function getBadgeType(step: QuantumStep, transformation: any): string {
+  // Check if this is a user gate
+  if (step.description.toLowerCase().includes('user gate:')) {
+    return 'gate'; // Orange color for user gates
+  }
+  
   const effect = transformation.effect;
   
   // Map effect to phase badge type
@@ -33,6 +38,11 @@ function getBadgeType(step: QuantumStep, transformation: any): string {
 
 // Determine badge label based on effect
 function getBadgeLabel(step: QuantumStep, transformation: any): string {
+  // Check if this is a user gate
+  if (step.description.toLowerCase().includes('user gate:')) {
+    return 'GATES';
+  }
+  
   const effect = transformation.effect;
   
   // Map effect to badge label
@@ -53,12 +63,46 @@ function getBadgeLabel(step: QuantumStep, transformation: any): string {
 }
 
 export function TransformationView({ steps, currentStepIndex = -1, qubitLabels = [] }: TransformationViewProps) {
-  // Фильтруем только шаги с трансформациями
-  const transformationSteps = steps.filter(step => step.transformation);
+  console.log('[TransformationView] Received steps:', steps.length);
+  
+  // Log user gates
+  const userGates = steps.filter(s => s.description.toLowerCase().includes('user gate:'));
+  console.log('[TransformationView] User gates found:', userGates.length);
+  userGates.forEach((gate, i) => {
+    console.log(`  User gate ${i}:`, gate.description, 'has transformation:', !!gate.transformation, 'type:', gate.type);
+    if (gate.transformation) {
+      console.log(`    Transformation:`, gate.transformation.effect, gate.transformation.icon);
+    }
+  });
+  
+  // Фильтруем шаги: с трансформациями ИЛИ важные текстовые логи (предупреждения)
+  const transformationSteps = steps.filter(step => {
+    const hasTransformation = !!step.transformation;
+    const isImportantLog = step.description.includes('⚠️') || 
+                          step.description.includes('ОБНАРУЖЕНО') ||
+                          step.description.includes('🔧') ||
+                          step.description.includes('Обнаружен');
+    
+    if (!hasTransformation && !isImportantLog) {
+      console.log('[TransformationView] Step without transformation (skipped):', step.description, step.type);
+    }
+    return hasTransformation || isImportantLog;
+  });
+  
+  console.log('[TransformationView] Steps with transformations:', transformationSteps.length);
+  console.log('[TransformationView] User gates in transformationSteps:', 
+    transformationSteps.filter(s => s.description.toLowerCase().includes('user gate:')).length);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(0);
   const totalPages = Math.ceil(transformationSteps.length / ITEMS_PER_PAGE);
+  
+  // Auto-navigate to last page when new transformations are added
+  React.useEffect(() => {
+    if (totalPages > 0 && currentPage >= totalPages) {
+      setCurrentPage(totalPages - 1);
+    }
+  }, [totalPages, currentPage]);
   
   // Calculate visible items
   const startIdx = currentPage * ITEMS_PER_PAGE;
@@ -125,6 +169,16 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
               >
                 →
               </button>
+              
+              <button
+                onClick={() => setCurrentPage(totalPages - 1)}
+                disabled={currentPage === totalPages - 1}
+                className="pagination-btn-inline"
+                title="Последняя страница"
+                style={{ marginLeft: '8px' }}
+              >
+                ⏭
+              </button>
             </>
           )}
         </div>
@@ -133,11 +187,32 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
       {/* Transformation content */}
       <div className="transformation-list">
         {visibleSteps.map((step, idx) => {
-          const t = step.transformation!;
           const globalIdx = startIdx + idx;
           const isActive = globalIdx === currentStepIndex;
-          // Номер среди трансформаций, а не среди всех шагов
           const stepNumber = globalIdx + 1;
+          
+          // Check if this is a text-only log (no transformation)
+          if (!step.transformation) {
+            return (
+              <div 
+                key={step.timestamp} 
+                className={`transformation-step text-log ${isActive ? 'active' : ''}`}
+              >
+                <div className="step-header">
+                  <span className="step-number">#{stepNumber}</span>
+                  <span className={`phase-badge phase-${step.type}`}>
+                    {getTypeLabel(step.type)}
+                  </span>
+                </div>
+                
+                <div className="step-description text-log-content">
+                  {step.description}
+                </div>
+              </div>
+            );
+          }
+          
+          const t = step.transformation;
 
           return (
              <div 

@@ -12,6 +12,8 @@ interface CircuitGate {
   column: number;
   type: 'gate' | 'measurement' | 'noise' | 'encode' | 'decode' | 'correction' | 'gate-error';
   label?: string;
+  stepIndex?: number; // Index of the step in history
+  measurementResult?: number; // Result of measurement (0 or 1)
 }
 
 interface QuantumCircuitProps {
@@ -70,13 +72,11 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
     const desc = step.description.toLowerCase();
     
     if (step.operation) {
-      // Skip auto-applied gate steps like "Apply X1 (noise)..." or "Apply X₁ (correction)..."
-      // They are not user operations and duplicate the NOISE/ERROR + CORRECTION events.
+      // Skip auto-applied gate steps like "Apply X₁ (correction)..." used for correction gates
+      // BUT keep noise gates "Apply X0 (noise)..." as they should be visualized
       const isAutoAppliedGate =
         step.type === 'gate' &&
-        (desc.includes('(noise)') ||
-        desc.includes('(correction)') ||
-        desc.includes(' (noise') ||
+        (desc.includes('(correction)') ||
         desc.includes(' (correction'));
       if (isAutoAppliedGate) {
         return;
@@ -84,6 +84,11 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
 
       // Skip gate-error steps - they will be shown as indicators on user gates
       if (step.type === 'gate-error') {
+        return;
+      }
+
+      // Skip user gates - they are already rendered via customGatePlan
+      if (step.type === 'gate' && desc.includes('user gate:')) {
         return;
       }
 
@@ -107,7 +112,9 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
         qubits,
         column,
         type: 'measurement',
-        label: step.description
+        label: step.description,
+        stepIndex: stepIdx,
+        measurementResult: step.measurementResult
       });
       stepToColumnMap.set(stepIdx, column);
       column++; // Увеличиваем колонку только если добавили гейт
@@ -530,7 +537,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
         {Array.from({ length: numQubits }, (_, i) => (
           <g key={`wire-${i}`}>
             {/* Visual indicator for drag-over */}
-            {isDroppable && draggedOverQubit === i && (
+            {isDroppable && isDragging && draggedOverQubit === i && (
               <rect
                 x={padding.left - 30}
                 y={getQubitY(i) - 20}
@@ -808,7 +815,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                 x={x}
                 y={getQubitY(gate.qubits[0])}
                 isActive={isActive}
-                result={gate.name.startsWith('S:') ? undefined : steps[gate.column]?.measurementResult}
+                result={gate.measurementResult}
               />
             );
           }
@@ -1014,13 +1021,11 @@ function generatePhaseLabels(
     // Determine phase from step type and description
     const desc = step.description.toLowerCase();
 
-    // Skip auto-applied gate-steps like "Apply X1 (noise)..." or "Apply X₁ (correction)..."
-    // They are not "ENCODE" operations and duplicate the NOISE/ERROR + CORRECTION labels.
+    // Skip auto-applied gate-steps like "Apply X₁ (correction)..."
+    // BUT keep noise gates "Apply X0 (noise)..." as they should be visualized
     const isAutoAppliedGate =
       step.type === 'gate' &&
-      (desc.includes('(noise)') ||
-        desc.includes('(correction)') ||
-        desc.includes(' (noise') ||
+      (desc.includes('(correction)') ||
         desc.includes(' (correction'));
     if (isAutoAppliedGate) {
       return;
@@ -1057,7 +1062,7 @@ function generatePhaseLabels(
       phaseName = 'MEASUREMENT';
       phaseColor = '#a855f7';
     } else if (step.type === 'correction') {
-      phaseName = 'CORRECTION';
+      phaseName = 'CORR'; // Shortened to fit in block
       phaseColor = '#10b981';
     }
     
@@ -1070,8 +1075,15 @@ function generatePhaseLabels(
       // INIT всегда в колонке 0 (зарезервированная колонка)
       column = 0;
     } else {
-      // Для остальных - из маппинга или предыдущая колонка
-      column = stepToColumnMap.get(stepIdx) ?? (phaseStartColumn ?? 0);
+      // Для остальных - из маппинга
+      const mappedColumn = stepToColumnMap.get(stepIdx);
+      if (mappedColumn === undefined) {
+        // Если шаг не в маппинге, значит он не был добавлен в parseStepsToGates
+        // (например, это просто лог без визуального представления)
+        // Пропускаем такой шаг для создания фазы
+        return;
+      }
+      column = mappedColumn;
     }
     
     // If this is a new phase
@@ -1108,8 +1120,8 @@ function generatePhaseLabels(
   
   return phases.map((phase, idx) => {
     // Add gap between phases to prevent overlapping
-    const leftMargin = idx > 0 ? 10 : 0; // 5px gap on the left (except first)
-    const rightMargin = idx < phases.length - 1 ? 10 : 0; // 5px gap on the right (except last)
+    const leftMargin = idx > 0 ? 20 : 0; // 20px gap on the left (except first)
+    const rightMargin = idx < phases.length - 1 ? 20 : 0; // 20px gap on the right (except last)
     
     // Увеличено расширение блоков для размещения длинных слов типа "CORRECTION"
     const startX = getColumnX(phase.start) - 45 + leftMargin;

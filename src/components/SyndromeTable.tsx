@@ -12,16 +12,46 @@ import type { NoiseType } from '../core/noise/noise';
 interface SyndromeTableProps {
   codeType: CodeType;
   currentSyndrome?: number[];
-  errorsApplied?: number; // Number of actual errors that were applied
+  expectedSyndrome?: number[]; // Expected syndrome after user gates (before errors)
+  errorsApplied?: number; // Number of actual errors that were applied (noise)
   noiseType?: NoiseType; // Type of noise applied
+  hasGateErrors?: boolean; // Whether gate errors occurred
+  gateErrorsCount?: number; // Number of gate errors
+  userGatesApplied?: boolean; // Whether user applied custom gates
 }
 
 export const SyndromeTable: React.FC<SyndromeTableProps> = ({
   codeType,
   currentSyndrome,
+  expectedSyndrome = [0, 0],
   errorsApplied = 0,
-  noiseType
+  noiseType,
+  hasGateErrors = false,
+  gateErrorsCount = 0,
+  userGatesApplied = false
 }) => {
+  // Calculate actual error syndrome (measured XOR expected)
+  const errorSyndrome = currentSyndrome && expectedSyndrome
+    ? currentSyndrome.map((s, i) => s ^ (expectedSyndrome[i] || 0))
+    : currentSyndrome;
+  
+  // Check if user gates changed the expected syndrome
+  const hasExpectedSyndromeChange = expectedSyndrome.some(s => s !== 0);
+  
+  // Use error syndrome for table matching when expected syndrome is non-zero
+  const syndromeToMatch = hasExpectedSyndromeChange ? errorSyndrome : currentSyndrome;
+  
+  // Calculate total errors
+  const totalErrors = gateErrorsCount + errorsApplied;
+  const tooManyErrors = totalErrors > 1 && codeType === 'repetition';
+  
+  console.log('[SyndromeTable] currentSyndrome:', currentSyndrome, 
+              'expectedSyndrome:', expectedSyndrome, 
+              'errorSyndrome:', errorSyndrome,
+              'syndromeToMatch:', syndromeToMatch,
+              'hasExpectedSyndromeChange:', hasExpectedSyndromeChange,
+              'totalErrors:', totalErrors);
+  
   const formatSyndrome = (syndrome: number[]): string => {
     return `(${syndrome.join(', ')})`;
   };
@@ -30,24 +60,26 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
     if (!syndrome) return false;
     return tableEntry === formatSyndrome(syndrome);
   };
+  
+  // Use syndromeToMatch for display
+  const displaySyndrome = syndromeToMatch;
 
   // Check for errors exceeding correction capability
   const isLogicalError = codeType === 'repetition' 
-    && currentSyndrome?.every(s => s === 0) 
+    && displaySyndrome?.every(s => s === 0) 
     && errorsApplied >= 2;
   
   const isWrongCorrection = codeType === 'repetition'
     && errorsApplied === 2
-    && !currentSyndrome?.every(s => s === 0);
+    && !displaySyndrome?.every(s => s === 0);
   
   // Check if using wrong noise type for repetition code
+  // Show warning if Z or Y errors were applied (they remain undetectable even after X-correction)
   const isWrongNoiseType = codeType === 'repetition'
-    && errorsApplied > 0
-    && (noiseType === 'phase-flip' || noiseType === 'bit-phase-flip')
-    && currentSyndrome?.every(s => s === 0);
+    && (noiseType === 'phase-flip' || noiseType === 'bit-phase-flip');
 
   if (codeType === 'repetition') {
-    const currentStr = currentSyndrome ? formatSyndrome(currentSyndrome) : null;
+    const currentStr = displaySyndrome ? formatSyndrome(displaySyndrome) : null;
     
     return (
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
@@ -57,6 +89,27 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
             Таблица синдромов (3-кубитный код)
           </h3>
         </div>
+        
+        {/* Too many errors warning (gate errors + noise > 1) */}
+        {tooManyErrors && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="mx-4 mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg"
+          >
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="text-red-300 font-medium">Обнаружено {totalErrors} ошибок!</p>
+                <p className="text-red-200/70 text-xs mt-1">
+                  Gate errors: {gateErrorsCount}, Шум: {errorsApplied}. 
+                  3-кубитный repetition код может исправить только 1 ошибку. 
+                  Коррекция будет неполной!
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
         
         {/* Logical error warning (3 errors - undetectable) */}
         {isLogicalError && (
@@ -109,11 +162,14 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
               <AlertTriangle className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm">
                 <p className="text-purple-300 font-medium">
-                  {noiseType === 'phase-flip' ? 'Z-ошибка не обнаруживается!' : 'Y-ошибка не обнаруживается!'}
+                  {noiseType === 'phase-flip' 
+                    ? 'Z-ошибка не обнаруживается!' 
+                    : 'Y-ошибка не обнаруживается!'}
                 </p>
                 <p className="text-purple-200/70 text-xs mt-1">
-                  3-кубитный repetition code исправляет только X (bit-flip) ошибки. 
-                  Для Z и Y ошибок используйте 9-кубитный код Шора!
+                  {noiseType === 'phase-flip'
+                    ? '3-кубитный repetition code исправляет только X (bit-flip) ошибки. Для Z и Y ошибок используйте 9-кубитный код Шора!'
+                    : '3-кубитный repetition code исправляет только X (bit-flip) ошибки. Z-часть ошибки не может быть обнаружена. Для Z и Y ошибок используйте 9-кубитный код Шора!'}
                 </p>
               </div>
             </div>

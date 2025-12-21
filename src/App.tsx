@@ -155,6 +155,65 @@ const App: React.FC = () => {
   }, [isPlaying, simulator]);
 
   // Control handlers
+  // Calculate expected syndrome after user gates (for syndrome table interpretation)
+  const calculateExpectedSyndrome = useCallback(() => {
+    if (customGatePlan.length === 0 || codeType !== 'repetition') {
+      return [0, 0];
+    }
+    
+    let s0 = 0, s1 = 0;
+    
+    // Apply syndrome changes from user gates (not from INIT/ENCODE)
+    for (const step of customGatePlan) {
+      const gateName = step.op.name;
+      const qubit = step.op.qubits[0];
+      
+      // X and Y change syndrome (bit-flip component)
+      if (gateName === 'X' || gateName === 'Y') {
+        if (qubit === 0) {
+          s0 ^= 1; // s_exp ⊕ (1,0)
+        } else if (qubit === 1) {
+          s0 ^= 1; // s_exp ⊕ (1,1)
+          s1 ^= 1;
+        } else if (qubit === 2) {
+          s1 ^= 1; // s_exp ⊕ (0,1)
+        }
+      }
+      // Rx(π), Ry(π) are equivalent to X (with phase difference)
+      else if (gateName === 'Rx' || gateName === 'Ry') {
+        // For repetition code (bit-flip), Rx(π) and Ry(π) act like X
+        // Small angle rotations don't change syndrome predictably (coherent error)
+        // We'll assume if user adds Rx/Ry, they mean π rotation
+        if (qubit === 0) {
+          s0 ^= 1;
+        } else if (qubit === 1) {
+          s0 ^= 1;
+          s1 ^= 1;
+        } else if (qubit === 2) {
+          s1 ^= 1;
+        }
+      }
+      // Z, S, T, Rz don't change bit-flip syndrome
+      // H, CNOT from user gates also change syndrome
+      else if (gateName === 'H') {
+        // H can change syndrome in complex ways, but for repetition code it's like bit-flip
+        if (qubit === 0) {
+          s0 ^= 1;
+        } else if (qubit === 1) {
+          s0 ^= 1;
+          s1 ^= 1;
+        } else if (qubit === 2) {
+          s1 ^= 1;
+        }
+      }
+    }
+    
+    console.log('[App] calculateExpectedSyndrome:', customGatePlan.length, 'gates → syndrome:', [s0, s1]);
+    return [s0, s1];
+  }, [customGatePlan, codeType]);
+
+  const expectedSyndrome = calculateExpectedSyndrome();
+
   const handlePlay = () => {
     // Always create new simulation with current settings
     const config: SimulatorConfig = {
@@ -177,10 +236,35 @@ const App: React.FC = () => {
     
     const sim = new QECSimulator(config);
     sim.initialize();
-    setSimulator(sim);
-    setPhase(sim.getPhase());
-    setCurrentStep(sim.getHistory().length);
-    setIsPlaying(true);
+    
+    // Check if there are custom gates to apply
+    if (customGatePlan.length > 0) {
+      console.log('[App] Play: Applying custom gates instead of noise', customGatePlan.length);
+      customGatePlan.forEach((gate, i) => {
+        console.log(`  [App] Custom gate ${i}:`, gate.op.name, 'qubits:', gate.op.qubits, 'errorProb:', gate.errorProbability);
+      });
+      
+      // Apply custom circuit (gates + optional noise + correction if gate errors occur)
+      try {
+        sim.applyCustomCircuit(customGatePlan, true); // true = apply noise after gates
+        console.log('[App] Custom circuit applied, final history length:', sim.getHistory().length);
+        console.log('[App] Final phase:', sim.getPhase());
+      } catch (error) {
+        console.error('[App] Error applying custom circuit:', error);
+      }
+      
+      setSimulator(sim);
+      setPhase(sim.getPhase());
+      setCurrentStep(sim.getHistory().length);
+      setIsPlaying(false); // Don't auto-play for custom gates
+    } else {
+      console.log('[App] Play: Running standard simulation with noise');
+      // Standard simulation flow
+      setSimulator(sim);
+      setPhase(sim.getPhase());
+      setCurrentStep(sim.getHistory().length);
+      setIsPlaying(true); // Auto-play for standard simulation
+    }
   };
 
   const handlePause = () => setIsPlaying(false);
@@ -235,6 +319,11 @@ const App: React.FC = () => {
   const handleClearCustomPlan = () => setCustomGatePlan([]);
 
   const handleRunCustomPlan = () => {
+    console.log('[App] handleRunCustomPlan called with', customGatePlan.length, 'gates');
+    customGatePlan.forEach((gate, i) => {
+      console.log(`  Gate ${i}:`, gate.op.name, 'qubits:', gate.op.qubits, 'errorProb:', gate.errorProbability);
+    });
+    
     const config: SimulatorConfig = {
       codeType,
       initialState,
@@ -254,8 +343,18 @@ const App: React.FC = () => {
     };
     const sim = new QECSimulator(config);
     sim.initialize();
+    
+    console.log('[App] After initialize, history length:', sim.getHistory().length);
+    
     // No need to call encode() - it's already done in initialize()
     sim.applyCustomCircuit(customGatePlan);
+    
+    console.log('[App] After applyCustomCircuit, history length:', sim.getHistory().length);
+    console.log('[App] History steps:');
+    sim.getHistory().forEach((step, i) => {
+      console.log(`  Step ${i}: ${step.type} - ${step.description} - transformation: ${!!step.transformation}`);
+    });
+    
     setSimulator(sim);
     setPhase(sim.getPhase());
     setCurrentStep(sim.getHistory().length);
@@ -620,8 +719,12 @@ const App: React.FC = () => {
             <SyndromeTable
               codeType={codeType}
               currentSyndrome={simulator?.getState().syndrome}
+              expectedSyndrome={expectedSyndrome}
               errorsApplied={simulator?.getState().noiseEvents.filter(e => e.applied).length ?? 0}
               noiseType={noiseType}
+              hasGateErrors={(simulator?.getHistory().filter(s => s.type === 'gate-error').length ?? 0) > 0}
+              gateErrorsCount={simulator?.getHistory().filter(s => s.type === 'gate-error').length ?? 0}
+              userGatesApplied={customGatePlan.length > 0 && simulator?.getPhase() === 'complete'}
             />
             
             {/* View Correction Details Button */}

@@ -551,15 +551,25 @@ export class QuantumSystem {
         ? this.generateTransformation(op, stateBefore, stateAfter)
         : this.generateStepTransformation(type, description, stateBefore, stateAfter);
       
-      this.history.push({
+      console.log('[QuantumSystem] Generated transformation:', transformation);
+      
+      // Use the provided description for user gates, otherwise use gate label/name
+      const stepDescription = description.toLowerCase().includes('user gate:') 
+        ? description  // Keep full description for user gates
+        : `${op.label || op.name}`; // Use short label for other gates
+      
+      const step: QuantumStep = {
         type,
         operation: op,
-        description: `${op.label || op.name}`,
+        description: stepDescription,
         stateBefore,
         stateAfter,
         timestamp: this.stepCounter++,
         transformation
-      });
+      };
+      
+      console.log('[QuantumSystem] Pushing step to history:', step);
+      this.history.push(step);
       
       console.log('[QuantumSystem] Added to history, new length:', this.history.length);
       
