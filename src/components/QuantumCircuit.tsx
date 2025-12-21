@@ -430,9 +430,9 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
   const extraSpace = isDroppable ? 3 : 0; // Extra space when in drop mode
   const totalColumns = baseNumColumns + extraSpace;
   
-  const wireSpacing = 50;
+  const wireSpacing = numQubits > 9 ? 35 : 50; // Уменьшенное расстояние для большего количества кубитов
   const columnWidth = 80; // Увеличено расстояние между колонками (клеточками) для лучшей читаемости
-  const phaseLabelsHeight = 50; // Увеличено для поддержки двух строк
+  const phaseLabelsHeight = numQubits > 9 ? 70 : 50; // Увеличено для 9+ кубитов, чтобы избежать наложения
   const padding = { left: 100, right: 40, top: 30, bottom: 30 }; // Увеличен left для отступа гейтов
   
   const width = Math.max(padding.left + totalColumns * columnWidth + padding.right, 400);
@@ -500,35 +500,39 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
       >
         {/* Phase labels at the top */}
         <g transform={`translate(0, 0)`}>
-          {phaseLabels.map((phase, idx) => (
-            <g key={`phase-${phase.name}-${idx}`}>
-              <rect
-                x={phase.startX}
-                y={6}
-                width={phase.endX - phase.startX}
-                height={38}
-                fill={`${phase.color}22`}
-                stroke={phase.color}
-                strokeWidth={2}
-                rx={4}
-              />
-              <text
-                x={phase.centerX}
-                y={18}
-                textAnchor="middle"
-                fill={phase.color}
-                fontSize={11}
-                fontWeight="bold"
-                fontFamily="monospace"
-              >
-                {phase.name.split('\n').map((line, i) => (
-                  <tspan key={i} x={phase.centerX} dy={i === 0 ? 0 : 14}>
-                    {line}
-                  </tspan>
-                ))}
-              </text>
-            </g>
-          ))}
+          {phaseLabels.map((phase, idx) => {
+            const labelHeight = numQubits > 9 ? 58 : 38; // Больше высоты для 9+ кубитов
+            const textStartY = numQubits > 9 ? 20 : 18;
+            return (
+              <g key={`phase-${phase.name}-${idx}`}>
+                <rect
+                  x={phase.startX}
+                  y={6}
+                  width={phase.endX - phase.startX}
+                  height={labelHeight}
+                  fill={`${phase.color}22`}
+                  stroke={phase.color}
+                  strokeWidth={2}
+                  rx={4}
+                />
+                <text
+                  x={phase.centerX}
+                  y={textStartY}
+                  textAnchor="middle"
+                  fill={phase.color}
+                  fontSize={numQubits > 9 ? 10 : 11}
+                  fontWeight="bold"
+                  fontFamily="monospace"
+                >
+                  {phase.name.split('\n').map((line, i) => (
+                    <tspan key={i} x={phase.centerX} dy={i === 0 ? 0 : 12}>
+                      {line}
+                    </tspan>
+                  ))}
+                </text>
+              </g>
+            );
+          })}
         </g>
         
         {/* Main circuit content - shifted down by phaseLabelsHeight */}

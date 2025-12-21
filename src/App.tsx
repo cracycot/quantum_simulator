@@ -36,7 +36,7 @@ import { ControlPanel } from './components/ControlPanel';
 import { EventLog } from './components/EventLog';
 import { SyndromeTable } from './components/SyndromeTable';
 import { QBERChart, QBERIndicator } from './components/QBERChart';
-import { StateDisplay, LogicalStateIndicator } from './components/StateDisplay';
+import { StateDisplay } from './components/StateDisplay';
 import { CorrectionDetailsModal } from './components/CorrectionDetailsModal';
 import { TransformationView } from './components/TransformationView';
 
@@ -73,7 +73,8 @@ const App: React.FC = () => {
 
   // Get number of qubits based on code type
   // repetition: 3 data + 2 ancilla (honest syndrome measurement)
-  const numQubits = codeType === 'repetition' ? 5 : 9;
+  // shor: 9 data + 8 ancilla = 17 total
+  const numQubits = codeType === 'repetition' ? 5 : 17;
 
   // Initialize simulator - only when code type or initial state changes
   const initializeSimulator = useCallback(() => {
@@ -430,33 +431,6 @@ const App: React.FC = () => {
 
   // Get current snapshot index for reactivity
   const snapshotIndex = simulator?.getCurrentSnapshotIndex() ?? 0;
-  
-  // Calculate fidelities - recalculate when simulation state changes
-  const fidelities = React.useMemo(() => {
-    // Force recalculation when phase or snapshot changes
-    if (!simulator || phase === 'init') return { zero: 0, one: 0 };
-    
-    try {
-      const state = simulator.getState().system.state;
-      if (!state || !state.amplitudes || state.amplitudes.length === 0) {
-        return { zero: 0, one: 0 };
-      }
-      
-      if (codeType === 'repetition') {
-        return {
-          zero: state.fidelity(getLogicalZeroState()),
-          one: state.fidelity(getLogicalOneState())
-        };
-      } else {
-        return {
-          zero: state.fidelity(getShorLogicalZeroState()),
-          one: state.fidelity(getShorLogicalOneState())
-        };
-      }
-    } catch {
-      return { zero: 0, one: 0 };
-    }
-  }, [simulator, phase, codeType, snapshotIndex]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -554,12 +528,6 @@ const App: React.FC = () => {
               numQubits={numQubits}
               isPlaying={isPlaying}
             />
-            
-            {/* Logical State Indicator */}
-            <LogicalStateIndicator
-              fidelityZero={fidelities.zero}
-              fidelityOne={fidelities.one}
-            />
           </div>
 
           {/* Center Panel - Main Visualization */}
@@ -655,35 +623,81 @@ const App: React.FC = () => {
               <AnimatePresence>
                 {showBlochSpheres && simulator && (
                   <motion.div
+                    key={`bloch-${currentStep}-${snapshotIndex}`}
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     className="px-6 pb-6"
                   >
+                    {/* Current step indicator */}
+                    <div className="mb-4 p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-cyan-300">
+                          <span className="font-semibold">Текущий шаг:</span> {simulator.getCurrentSnapshotIndex() + 1} / {simulator.getSnapshotCount()}
+                        </div>
+                        <div className="text-sm text-cyan-400">
+                          Фаза: <span className="font-mono">{phase.toUpperCase()}</span>
+                        </div>
+                      </div>
+                      
+                      {/* Correction info */}
+                      {phase === 'correction' && simulator.getState().correctedQubits.length > 0 && (
+                        <div className="mt-2 p-2 bg-green-500/20 border border-green-500/40 rounded text-sm text-green-300">
+                          ✅ Коррекция применена на: <span className="font-mono font-bold">
+                            {simulator.getState().correctedQubits.map(q => `q${q}`).join(', ')}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {codeType === 'repetition' && phase !== 'init' && (
+                        <div className="text-xs text-cyan-400/70 mt-2">
+                          ℹ️ Для запутанных кубитов координаты ≈ (0,0,0) — это нормально! 
+                          Используйте кнопки ◀ ▶ (внизу панели "Управление") для навигации.
+                        </div>
+                      )}
+                    </div>
+                    
                     {/* Single Bloch sphere for selected qubit */}
                     <div className="mb-4">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-sm text-slate-400">Выбранный кубит:</span>
                         <div className="flex gap-1">
-                          {Array.from({ length: numQubits }, (_, i) => (
-                            <button
-                              key={i}
-                              onClick={() => setSelectedQubit(i)}
-                              className={`px-2 py-1 text-xs rounded transition-all ${
-                                selectedQubit === i
-                                  ? 'bg-cyan-500 text-white'
-                                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                              }`}
-                            >
-                              q{i}
-                            </button>
-                          ))}
+                          {Array.from({ length: numQubits }, (_, i) => {
+                            const isCorrected = simulator.getState().correctedQubits.includes(i);
+                            return (
+                              <button
+                                key={i}
+                                onClick={() => setSelectedQubit(i)}
+                                className={`px-2 py-1 text-xs rounded transition-all ${
+                                  selectedQubit === i
+                                    ? 'bg-cyan-500 text-white'
+                                    : isCorrected
+                                      ? 'bg-green-500 text-white ring-2 ring-green-400'
+                                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                }`}
+                                title={isCorrected ? `Исправлен на шаге ${simulator.getCurrentSnapshotIndex()}` : `Кубит q${i}`}
+                              >
+                                q{i}{isCorrected && ' ✓'}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                       
                       <div className="flex justify-center">
                         <BlochSphere
-                          coordinates={simulator.getBlochCoordinates().get(selectedQubit) || [0, 0, 1]}
+                          coordinates={(() => {
+                            try {
+                              const allCoords = simulator.getBlochCoordinates();
+                              const coords = allCoords.get(selectedQubit);
+                              console.log('[App] Bloch coordinates for q' + selectedQubit + ':', coords, 'step:', currentStep);
+                              console.log('[App] All Bloch coordinates:', Array.from(allCoords.entries()));
+                              return coords || [0, 0, 1];
+                            } catch (e) {
+                              console.error('[App] Error getting Bloch coordinates:', e);
+                              return [0, 0, 1];
+                            }
+                          })()}
                           label={`q${selectedQubit}`}
                           size={280}
                         />
@@ -737,12 +751,6 @@ const App: React.FC = () => {
                 Просмотреть процесс коррекции
               </button>
             )}
-
-            {/* QBER Indicator */}
-            <QBERIndicator
-              physicalError={errorCount / numQubits}
-              logicalError={1 - fidelities.zero}
-            />
           </div>
         </div>
 
@@ -916,33 +924,6 @@ const App: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
-
-      {/* Correction Details Modal */}
-      {simulator && (
-        <CorrectionDetailsModal
-          isOpen={showCorrectionDetails}
-          onClose={() => setShowCorrectionDetails(false)}
-          steps={simulator.getHistory()}
-          syndrome={simulator.getState().syndrome}
-          correctedQubits={simulator.getState().correctedQubits}
-          codeType={codeType}
-          fidelityBefore={(() => {
-            // Calculate fidelity before correction (approximation)
-            const history = simulator.getHistory();
-            const correctionStep = history.findIndex(s => s.type === 'correction');
-            if (correctionStep > 0) {
-              const stateBefore = history[correctionStep - 1]?.stateAfter;
-              if (stateBefore) {
-                if (codeType === 'repetition') {
-                  return stateBefore.fidelity(getLogicalZeroState());
-                }
-              }
-            }
-            return fidelities.zero < 0.5 ? fidelities.zero : 1 - fidelities.zero;
-          })()}
-          fidelityAfter={fidelities.zero}
-        />
-      )}
 
       {/* Footer */}
       <footer className="border-t border-slate-800 mt-12 py-6">

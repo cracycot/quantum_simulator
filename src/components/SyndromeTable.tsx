@@ -263,23 +263,24 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
               </tr>
             </thead>
             <tbody>
-              {[0, 1, 2].map((block) => {
-                const blockEntries = shorBitFlipSyndromeTable.filter(e => e.block === block);
-                const blockSyndrome = bitSyndrome?.slice(block * 2, block * 2 + 2);
+              {[1, 2, 3].map((blockNum) => {
+                const blockEntries = shorBitFlipSyndromeTable.filter(e => e.block === blockNum);
+                const blockIdx = blockNum - 1; // Convert to 0-indexed for syndrome array
+                const blockSyndrome = bitSyndrome?.slice(blockIdx * 2, blockIdx * 2 + 2);
                 const currentBlockStr = blockSyndrome ? formatSyndrome(blockSyndrome) : null;
                 
                 return blockEntries.map((entry, idx) => {
                   const isCurrent = currentBlockStr === entry.syndrome;
                   return (
                     <tr
-                      key={`${block}-${idx}`}
+                      key={`${blockNum}-${idx}`}
                       className={`border-t border-slate-700/50 ${
                         isCurrent ? 'bg-cyan-500/20' : ''
                       }`}
                     >
                       {idx === 0 && (
                         <td className="py-2 px-2 text-slate-500" rowSpan={4}>
-                          {block}
+                          {blockNum}
                         </td>
                       )}
                       <td className="py-2 px-2 font-mono text-slate-300">

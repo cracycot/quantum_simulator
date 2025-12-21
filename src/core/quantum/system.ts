@@ -144,20 +144,12 @@ export class QuantumSystem {
       console.log('[QuantumSystem] After H + CNOTs, history length:', this.history.length);
     }
     
-    // For Shor code (9 qubits), apply Hadamard and 2 CNOTs immediately
-    if (this.numQubits === 9) {
-      console.log('[QuantumSystem] Applying H + 2 CNOTs for 9-qubit code');
-      // Step 1: Apply Hadamard to create superposition |0⟩→|+⟩
-      this.applyGatesWithDescription([
-        { name: 'H', qubits: [0], label: 'H₀' }
-      ], '🌀 Hadamard на q₀: создание суперпозиции\n|0⟩ → |+⟩ = (|0⟩+|1⟩)/√2\nЗащита от фазовых ошибок', 'encode');
-      
-      // Step 2: Distribute state across blocks (2 CNOTs)
-      this.applyGatesWithDescription([
-        { name: 'CNOT', qubits: [0, 3], label: 'CNOT₀₃' },
-        { name: 'CNOT', qubits: [0, 6], label: 'CNOT₀₆' }
-      ], '📡 Распределение между блоками (2 CNOT)\nq₀→q₃ и q₀→q₆: создаём связь между лидерами блоков\n|+⟩ → |+++⟩ (лидеры)', 'encode');
-      console.log('[QuantumSystem] After H + CNOTs, history length:', this.history.length);
+    // For Shor code (17 qubits = 9 data + 8 ancilla), apply encoding immediately
+    if (this.numQubits === 17) {
+      console.log('[QuantumSystem] Initialized q₀ in |0⟩, applying Shor encoding');
+      // Import and call encodeShor here
+      // Note: This creates a circular dependency, so we'll handle it differently
+      // The encoding will be called from simulator.ts instead
     }
   }
 
@@ -185,18 +177,10 @@ export class QuantumSystem {
       ], '🔗 Связывание кубитов (2 CNOT)\n|−⟩ → (|000⟩−|111⟩)/√2', 'encode');
     }
     
-    // For Shor code (9 qubits), apply Hadamard and 2 CNOTs immediately
-    if (this.numQubits === 9) {
-      // Step 1: Apply Hadamard to create superposition |1⟩→|−⟩
-      this.applyGatesWithDescription([
-        { name: 'H', qubits: [0], label: 'H₀' }
-      ], '🌀 Hadamard на q₀ после X\n|1⟩ → |−⟩ = (|0⟩−|1⟩)/√2', 'encode');
-      
-      // Step 2: Distribute state across blocks (2 CNOTs)
-      this.applyGatesWithDescription([
-        { name: 'CNOT', qubits: [0, 3], label: 'CNOT₀₃' },
-        { name: 'CNOT', qubits: [0, 6], label: 'CNOT₀₆' }
-      ], '📡 Распределение между блоками (2 CNOT)\n|−⟩ → |−−−⟩ (лидеры)', 'encode');
+    // For Shor code (17 qubits = 9 data + 8 ancilla), just initialize d1 in |1⟩
+    // Encoding will be done separately via encodeShor()
+    if (this.numQubits === 17) {
+      console.log('[QuantumSystem] Initialized d₁ in |1⟩, ready for Shor encoding');
     }
   }
 
@@ -340,26 +324,27 @@ export class QuantumSystem {
    * Generate simplified state representation
    */
   private simplifyState(state: StateVector, maxTerms: number = 4): string {
-    const significant: Array<{ basis: string; coeff: number; phase: number }> = [];
+    const significant: Array<{ basis: string; coeff: number; phase: number; index: number }> = [];
     
     for (let i = 0; i < state.dimension; i++) {
       const amp = state.amplitudes[i];
       const prob = amp.absSquared();
       
       if (prob > 0.001) {
-        // Reverse bit order for more intuitive display (q0,q1,q2,q3,q4 from left to right)
+        // Reverse bit order for intuitive display (q0,q1,q2,q3,q4 from left to right)
         const basisBinary = i.toString(2).padStart(state.numQubits, '0');
         const basis = basisBinary.split('').reverse().join('');
         const coeff = amp.abs();
         const phase = Math.atan2(amp.im, amp.re);
-        significant.push({ basis, coeff, phase });
+        significant.push({ basis, coeff, phase, index: i });
       }
     }
     
-    // Sort by coefficient (descending)
-    significant.sort((a, b) => b.coeff - a.coeff);
+    // Sort by original state vector index for stable ordering
+    // This keeps the order consistent across operations
+    significant.sort((a, b) => a.index - b.index);
     
-    // Take top terms
+    // Take top terms (in original index order)
     const terms = significant.slice(0, maxTerms).map(({ basis, coeff, phase }) => {
       let coeffStr = coeff.toFixed(4);
       
@@ -786,12 +771,17 @@ export function create5QubitRepetitionSystem(gateErrorConfig?: GateErrorConfig):
 }
 
 /**
- * Create a quantum system for 9-qubit Shor code
+ * Create a quantum system for 9-qubit Shor code with 8 ancilla qubits (17 total)
  */
 export function create9QubitShorSystem(gateErrorConfig?: GateErrorConfig): QuantumSystem {
-  const system = new QuantumSystem(9, gateErrorConfig);
+  const system = new QuantumSystem(17, gateErrorConfig); // 9 data + 8 ancilla
+  // Data qubits: q0-q8 (indices 0-8)
   for (let i = 0; i < 9; i++) {
     system.setQubitInfo(i, `q${i}`, 'data');
+  }
+  // Ancilla qubits: a0-a7 (indices 9-16)
+  for (let i = 0; i < 8; i++) {
+    system.setQubitInfo(9 + i, `a${i}`, 'ancilla');
   }
   return system;
 }

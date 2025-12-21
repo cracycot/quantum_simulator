@@ -31,164 +31,238 @@ export interface ShorCodeResult {
 /**
  * Encode a single qubit into 9-qubit Shor code
  * 
- * Кодирование внутри блоков для защиты от битовых ошибок
+ * Encoding: 2 layers
+ * Layer A: Phase repetition on leaders (q0, q3, q6)
+ * Layer B: Bit repetition within each block
  */
 export function encodeShor(system: QuantumSystem): void {
-  // Bit-flip protection within each block
-  // Block 0: qubits 0,1,2
+  // === LAYER A: Phase Repetition ===
+  // Step A1: Apply Hadamard to q0 first (create superposition)
   system.applyGatesWithDescription([
-    { name: 'CNOT', qubits: [0, 1] },
-    { name: 'CNOT', qubits: [0, 2] }
-  ], '🔗 Защита от битовых ошибок в блоке 0 (q₀,q₁,q₂)\nCNOT создаёт запутанность для репликации состояния', 'encode');
+    { name: 'H', qubits: [0], label: 'H_{q0}' }
+  ], '🌀 ШАГ A1: Hadamard на q₀\nСоздание суперпозиции: |0⟩ → |+⟩ = (|0⟩+|1⟩)/√2\nили |1⟩ → |−⟩ = (|0⟩−|1⟩)/√2', 'encode');
   
-  // Block 1: qubits 3,4,5
+  // Step A2: CNOT q0 -> q3
   system.applyGatesWithDescription([
-    { name: 'CNOT', qubits: [3, 4] },
-    { name: 'CNOT', qubits: [3, 5] }
-  ], '🔗 Защита от битовых ошибок в блоке 1 (q₃,q₄,q₅)\nCNOT создаёт запутанность для репликации состояния', 'encode');
+    { name: 'CNOT', qubits: [0, 3], label: 'CNOT_{q0→q3}' }
+  ], '🔗 ШАГ A2: CNOT(q₀→q₃)\nКопирование состояния на лидера блока 2', 'encode');
   
-  // Block 2: qubits 6,7,8
+  // Step A3: CNOT q0 -> q6
   system.applyGatesWithDescription([
-    { name: 'CNOT', qubits: [6, 7] },
-    { name: 'CNOT', qubits: [6, 8] }
-  ], '🔗 Защита от битовых ошибок в блоке 2 (q₆,q₇,q₈)\nCNOT создаёт запутанность для репликации состояния', 'encode');
+    { name: 'CNOT', qubits: [0, 6], label: 'CNOT_{q0→q6}' }
+  ], '🔗 ШАГ A3: CNOT(q₀→q₆)\nКопирование состояния на лидера блока 3', 'encode');
   
-  system.logStep('encode', '✨ Кодирование завершено: 1 логический кубит → 9 физических кубитов (код Шора)');
+  // Step A4: Apply Hadamard to all leaders (q0, q3, q6)
+  system.applyGatesWithDescription([
+    { name: 'H', qubits: [0], label: 'H_{q0}' },
+    { name: 'H', qubits: [3], label: 'H_{q3}' },
+    { name: 'H', qubits: [6], label: 'H_{q6}' }
+  ], '🌀 ШАГ A4: Hadamard на всех лидерах (q₀, q₃, q₆)\nПереход в X-базис для защиты от фазовых ошибок', 'encode');
+  
+  // === LAYER B (Step A5): Bit Repetition within blocks ===
+  // Block 1: q0 → q1, q2
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [0, 1], label: 'CNOT_{q0→q1}' },
+    { name: 'CNOT', qubits: [0, 2], label: 'CNOT_{q0→q2}' }
+  ], '🔗 ШАГ A5: Битовый repetition в блоке 1 (q₀,q₁,q₂)\nCNOT(q₀→q₁), CNOT(q₀→q₂)\nЗащита от битовых ошибок внутри блока', 'encode');
+  
+  // Block 2: q3 → q4, q5
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [3, 4], label: 'CNOT_{q3→q4}' },
+    { name: 'CNOT', qubits: [3, 5], label: 'CNOT_{q3→q5}' }
+  ], '🔗 ШАГ A5: Битовый repetition в блоке 2 (q₃,q₄,q₅)\nCNOT(q₃→q₄), CNOT(q₃→q₅)\nЗащита от битовых ошибок внутри блока', 'encode');
+  
+  // Block 3: q6 → q7, q8
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [6, 7], label: 'CNOT_{q6→q7}' },
+    { name: 'CNOT', qubits: [6, 8], label: 'CNOT_{q6→q8}' }
+  ], '🔗 ШАГ A5: Битовый repetition в блоке 3 (q₆,q₇,q₈)\nCNOT(q₆→q₇), CNOT(q₆→q₈)\nЗащита от битовых ошибок внутри блока', 'encode');
+  
+  system.logStep('encode', '✨ Кодирование завершено: 1 логический кубит → 9 физических\n|0⟩_L = (|000⟩+|111⟩)/√2 ⊗ (|000⟩+|111⟩)/√2 ⊗ (|000⟩+|111⟩)/√2\n|1⟩_L = (|000⟩−|111⟩)/√2 ⊗ (|000⟩−|111⟩)/√2 ⊗ (|000⟩−|111⟩)/√2');
 }
 
 /**
  * Decode 9-qubit Shor code back to single qubit
- * Обратная последовательность к encodeShor
+ * Reverse of encodeShor: undo Layer B, then Layer A
  */
 export function decodeShor(system: QuantumSystem): void {
-  // Reverse bit-flip encoding for each block
+  // === Reverse LAYER B (Step A5): Bit Repetition ===
+  // Block 3: undo q6 → q7, q8
   system.applyGatesWithDescription([
-    { name: 'CNOT', qubits: [6, 8] },
-    { name: 'CNOT', qubits: [6, 7] }
-  ], 'Reverse bit-flip protection in block 2', 'decode');
+    { name: 'CNOT', qubits: [6, 8], label: 'CNOT_{q6→q8}' },
+    { name: 'CNOT', qubits: [6, 7], label: 'CNOT_{q6→q7}' }
+  ], 'Reverse bit repetition in block 3', 'decode');
   
+  // Block 2: undo q3 → q4, q5
   system.applyGatesWithDescription([
-    { name: 'CNOT', qubits: [3, 5] },
-    { name: 'CNOT', qubits: [3, 4] }
-  ], 'Reverse bit-flip protection in block 1', 'decode');
+    { name: 'CNOT', qubits: [3, 5], label: 'CNOT_{q3→q5}' },
+    { name: 'CNOT', qubits: [3, 4], label: 'CNOT_{q3→q4}' }
+  ], 'Reverse bit repetition in block 2', 'decode');
   
+  // Block 1: undo q0 → q1, q2
   system.applyGatesWithDescription([
-    { name: 'CNOT', qubits: [0, 2] },
-    { name: 'CNOT', qubits: [0, 1] }
-  ], 'Reverse bit-flip protection in block 0', 'decode');
+    { name: 'CNOT', qubits: [0, 2], label: 'CNOT_{q0→q2}' },
+    { name: 'CNOT', qubits: [0, 1], label: 'CNOT_{q0→q1}' }
+  ], 'Reverse bit repetition in block 1', 'decode');
   
-  // Reverse 2 CNOT between blocks
+  // === Reverse LAYER A ===
+  // Reverse Step A4: Hadamard on all leaders (q0, q3, q6)
   system.applyGatesWithDescription([
-    { name: 'CNOT', qubits: [0, 6] },
-    { name: 'CNOT', qubits: [0, 3] }
-  ], 'Merge blocks back to single qubit', 'decode');
+    { name: 'H', qubits: [6], label: 'H_{q6}' },
+    { name: 'H', qubits: [3], label: 'H_{q3}' },
+    { name: 'H', qubits: [0], label: 'H_{q0}' }
+  ], 'Reverse Hadamard on all leaders', 'decode');
   
-  // Reverse Hadamard
+  // Reverse Step A3: CNOT q0 -> q6
   system.applyGatesWithDescription([
-    { name: 'H', qubits: [0] }
-  ], 'Reverse Hadamard: |+⟩ → |0⟩', 'decode');
+    { name: 'CNOT', qubits: [0, 6], label: 'CNOT_{q0→q6}' }
+  ], 'Reverse CNOT q0→q6', 'decode');
+  
+  // Reverse Step A2: CNOT q0 -> q3
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [0, 3], label: 'CNOT_{q0→q3}' }
+  ], 'Reverse CNOT q0→q3', 'decode');
+  
+  // Reverse Step A1: Hadamard on q0
+  system.applyGatesWithDescription([
+    { name: 'H', qubits: [0], label: 'H_{q0}' }
+  ], 'Reverse Hadamard: |+⟩ → |0⟩ or |−⟩ → |1⟩', 'decode');
   
   system.logStep('decode', 'Decoded from 9-qubit Shor code');
 }
 
 /**
- * Measure bit-flip syndromes within each block
+ * Measure bit-flip syndromes using 6 ancilla qubits (a0-a5)
  * Returns 6 syndrome bits (2 per block)
+ * 
+ * Measurement process:
+ * 1. Ancilla in |0⟩
+ * 2. CNOT(data → ancilla) for each pair
+ * 3. Measure ancilla in Z basis
  */
 export function measureBitFlipSyndrome(system: QuantumSystem): [number, number, number, number, number, number] {
-  const state = system.state;
   const syndromes: number[] = [];
   
-  // For each block, measure Z₀Z₁ and Z₁Z₂ parity
-  const blocks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]];
+  // Block 1 (q0,q1,q2) → ancillas a0,a1
+  // S0 = Z_q0 Z_q1 (ancilla a0 = index 9)
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [0, 9], label: 'CNOT_{q0→a0}' },
+    { name: 'CNOT', qubits: [1, 9], label: 'CNOT_{q1→a0}' }
+  ], '🔍 Измерение S₀ = Z_{q0}Z_{q1} через анциллу a₀', 'measurement');
   
-  for (const [q0, q1, q2] of blocks) {
-    let expZ01 = 0;
-    let expZ12 = 0;
-    
-    for (let i = 0; i < state.dimension; i++) {
-      const prob = state.amplitudes[i].absSquared();
-      const b0 = (i >> q0) & 1;
-      const b1 = (i >> q1) & 1;
-      const b2 = (i >> q2) & 1;
-      
-      expZ01 += prob * ((b0 ^ b1) === 0 ? 1 : -1);
-      expZ12 += prob * ((b1 ^ b2) === 0 ? 1 : -1);
-    }
-    
-    syndromes.push(expZ01 < 0 ? 1 : 0);
-    syndromes.push(expZ12 < 0 ? 1 : 0);
-  }
+  // Measure a0
+  const s0 = system.measureQubit(9);
+  syndromes.push(s0);
+  
+  // S1 = Z_q1 Z_q2 (ancilla a1 = index 10)
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [1, 10], label: 'CNOT_{q1→a1}' },
+    { name: 'CNOT', qubits: [2, 10], label: 'CNOT_{q2→a1}' }
+  ], '🔍 Измерение S₁ = Z_{q1}Z_{q2} через анциллу a₁', 'measurement');
+  
+  const s1 = system.measureQubit(10);
+  syndromes.push(s1);
+  
+  // Block 2 (q3,q4,q5) → ancillas a2,a3
+  // S2 = Z_q3 Z_q4 (ancilla a2 = index 11)
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [3, 11], label: 'CNOT_{q3→a2}' },
+    { name: 'CNOT', qubits: [4, 11], label: 'CNOT_{q4→a2}' }
+  ], '🔍 Измерение S₂ = Z_{q3}Z_{q4} через анциллу a₂', 'measurement');
+  
+  const s2 = system.measureQubit(11);
+  syndromes.push(s2);
+  
+  // S3 = Z_q4 Z_q5 (ancilla a3 = index 12)
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [4, 12], label: 'CNOT_{q4→a3}' },
+    { name: 'CNOT', qubits: [5, 12], label: 'CNOT_{q5→a3}' }
+  ], '🔍 Измерение S₃ = Z_{q4}Z_{q5} через анциллу a₃', 'measurement');
+  
+  const s3 = system.measureQubit(12);
+  syndromes.push(s3);
+  
+  // Block 3 (q6,q7,q8) → ancillas a4,a5
+  // S4 = Z_q6 Z_q7 (ancilla a4 = index 13)
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [6, 13], label: 'CNOT_{q6→a4}' },
+    { name: 'CNOT', qubits: [7, 13], label: 'CNOT_{q7→a4}' }
+  ], '🔍 Измерение S₄ = Z_{q6}Z_{q7} через анциллу a₄', 'measurement');
+  
+  const s4 = system.measureQubit(13);
+  syndromes.push(s4);
+  
+  // S5 = Z_q7 Z_q8 (ancilla a5 = index 14)
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [7, 14], label: 'CNOT_{q7→a5}' },
+    { name: 'CNOT', qubits: [8, 14], label: 'CNOT_{q8→a5}' }
+  ], '🔍 Измерение S₅ = Z_{q7}Z_{q8} через анциллу a₅', 'measurement');
+  
+  const s5 = system.measureQubit(14);
+  syndromes.push(s5);
   
   return syndromes as [number, number, number, number, number, number];
 }
 
 /**
- * Measure phase-flip syndromes between blocks
- * For Shor code after bit-flip correction, phase errors only occur if there was an actual Z or Y error
- * We detect by checking if the global phase pattern across blocks is consistent
+ * Measure phase-flip syndromes using 2 ancilla qubits (a6,a7)
+ * 
+ * S6 = X_q0 X_q1 X_q2 X_q3 X_q4 X_q5 (ancilla a6)
+ * S7 = X_q3 X_q4 X_q5 X_q6 X_q7 X_q8 (ancilla a7)
+ * 
+ * Measurement process:
+ * 1. Prepare ancilla in |+⟩ (H gate)
+ * 2. CNOT(ancilla → data) for each data qubit
+ * 3. Measure ancilla in X basis (H then measure Z)
  */
 export function measurePhaseFlipSyndrome(system: QuantumSystem): [number, number] {
-  const state = system.state;
+  // S6 = X_q0 X_q1 X_q2 X_q3 X_q4 X_q5 (ancilla a6 = index 15)
+  // Prepare a6 in |+⟩
+  system.applyGatesWithDescription([
+    { name: 'H', qubits: [15], label: 'H_{a6}' }
+  ], '🔍 Подготовка анциллы a₆ в состояние |+⟩', 'measurement');
   
-  // After bit-flip correction, each block should be in (|000⟩ ± |111⟩)
-  // Phase syndrome detects if blocks have wrong relative signs
+  // Apply CNOT(a6 → q_i) for blocks 1 and 2
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [15, 0], label: 'CNOT_{a6→q0}' },
+    { name: 'CNOT', qubits: [15, 1], label: 'CNOT_{a6→q1}' },
+    { name: 'CNOT', qubits: [15, 2], label: 'CNOT_{a6→q2}' },
+    { name: 'CNOT', qubits: [15, 3], label: 'CNOT_{a6→q3}' },
+    { name: 'CNOT', qubits: [15, 4], label: 'CNOT_{a6→q4}' },
+    { name: 'CNOT', qubits: [15, 5], label: 'CNOT_{a6→q5}' }
+  ], '🔍 Измерение S₆ = X_{q0}...X_{q5} через анциллу a₆', 'measurement');
   
-  // Count amplitude signs for basis states in each block pattern
-  let block0_positive = 0, block0_negative = 0;
-  let block1_positive = 0, block1_negative = 0;
-  let block2_positive = 0, block2_negative = 0;
+  // Measure in X basis (H then measure Z)
+  system.applyGatesWithDescription([
+    { name: 'H', qubits: [15], label: 'H_{a6}' }
+  ], '🔍 Переход в X-базис для измерения a₆', 'measurement');
   
-  // Sample key basis states to determine block phases
-  const test_states = [
-    0b000000000,  // |000⟩|000⟩|000⟩
-    0b000000111,  // |000⟩|000⟩|111⟩
-    0b000111000,  // |000⟩|111⟩|000⟩
-    0b000111111,  // |000⟩|111⟩|111⟩
-    0b111000000,  // |111⟩|000⟩|000⟩
-    0b111000111,  // |111⟩|000⟩|111⟩
-    0b111111000,  // |111⟩|111⟩|000⟩
-    0b111111111,  // |111⟩|111⟩|111⟩
-  ];
+  const s6 = system.measureQubit(15);
   
-  for (const idx of test_states) {
-    const amp = state.amplitudes[idx];
-    const prob = amp.absSquared();
-    if (prob < 1e-10) continue;
-    
-    const sign = amp.re > 0 ? 1 : -1;
-    const block0_state = (idx >> 0) & 0b111;
-    const block1_state = (idx >> 3) & 0b111;
-    const block2_state = (idx >> 6) & 0b111;
-    
-    // Check if block is in |111⟩ state (determines phase contribution)
-    if (block0_state === 0b111) block0_negative += sign * prob;
-    else block0_positive += sign * prob;
-    
-    if (block1_state === 0b111) block1_negative += sign * prob;
-    else block1_positive += sign * prob;
-    
-    if (block2_state === 0b111) block2_negative += sign * prob;
-    else block2_positive += sign * prob;
-  }
+  // S7 = X_q3 X_q4 X_q5 X_q6 X_q7 X_q8 (ancilla a7 = index 16)
+  // Prepare a7 in |+⟩
+  system.applyGatesWithDescription([
+    { name: 'H', qubits: [16], label: 'H_{a7}' }
+  ], '🔍 Подготовка анциллы a₇ в состояние |+⟩', 'measurement');
   
-  // Determine if blocks have consistent phases
-  // If all blocks have same phase pattern relative to |000⟩ and |111⟩ states,
-  // then no phase error
+  // Apply CNOT(a7 → q_i) for blocks 2 and 3
+  system.applyGatesWithDescription([
+    { name: 'CNOT', qubits: [16, 3], label: 'CNOT_{a7→q3}' },
+    { name: 'CNOT', qubits: [16, 4], label: 'CNOT_{a7→q4}' },
+    { name: 'CNOT', qubits: [16, 5], label: 'CNOT_{a7→q5}' },
+    { name: 'CNOT', qubits: [16, 6], label: 'CNOT_{a7→q6}' },
+    { name: 'CNOT', qubits: [16, 7], label: 'CNOT_{a7→q7}' },
+    { name: 'CNOT', qubits: [16, 8], label: 'CNOT_{a7→q8}' }
+  ], '🔍 Измерение S₇ = X_{q3}...X_{q8} через анциллу a₇', 'measurement');
   
-  // For properly encoded |0⟩_L, all amplitudes are positive
-  // For |1⟩_L, |111⟩ states have negative amplitude
+  // Measure in X basis (H then measure Z)
+  system.applyGatesWithDescription([
+    { name: 'H', qubits: [16], label: 'H_{a7}' }
+  ], '🔍 Переход в X-базис для измерения a₇', 'measurement');
   
-  // Compare phase patterns between blocks
-  const block0_phase = Math.sign(block0_positive + block0_negative);
-  const block1_phase = Math.sign(block1_positive + block1_negative);
-  const block2_phase = Math.sign(block2_positive + block2_negative);
+  const s7 = system.measureQubit(16);
   
-  // Syndrome: detect if any block has opposite phase
-  const s1 = (block0_phase !== block1_phase) ? 1 : 0;
-  const s2 = (block1_phase !== block2_phase) ? 1 : 0;
-  
-  return [s1, s2];
+  return [s6, s7];
 }
 
 /**
@@ -199,49 +273,54 @@ export function correctBitFlipErrors(
   syndrome: [number, number, number, number, number, number]
 ): number[] {
   const corrected: number[] = [];
-  const blocks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]];
+  const blocks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]; // q0-q2, q3-q5, q6-q8
+  const blockLabels = ['1 (q₀,q₁,q₂)', '2 (q₃,q₄,q₅)', '3 (q₆,q₇,q₈)'];
   const corrections: string[] = [];
   
   for (let blockIdx = 0; blockIdx < 3; blockIdx++) {
     const s1 = syndrome[blockIdx * 2];
     const s2 = syndrome[blockIdx * 2 + 1];
     const [q0, q1, q2] = blocks[blockIdx];
+    const dataLabels = [`q${q0}`, `q${q1}`, `q${q2}`];
     
     if (s1 === 0 && s2 === 0) {
       // No error in this block
-      corrections.push(`Блок ${blockIdx}: синдром (0,0) → ошибки нет`);
+      corrections.push(`Блок ${blockLabels[blockIdx]}: синдром (0,0) → ошибки нет`);
     } else if (s1 === 1 && s2 === 0) {
-      // Perfect correction - no gate errors
+      // Error on first qubit of block
       system.applyGatesWithDescription(
-        [{ name: 'X', qubits: [q0], label: `X${q0}` }],
-        `✅ Коррекция: X на q${q0}`,
+        [{ name: 'X', qubits: [q0], label: `X_{${dataLabels[0]}}` }],
+        `✅ Коррекция: X на ${dataLabels[0]}`,
         'correction'
       );
       corrected.push(q0);
-      corrections.push(`Блок ${blockIdx}: синдром (1,0) → применить X к q${q0}`);
+      corrections.push(`Блок ${blockLabels[blockIdx]}: синдром (1,0) → применить X к ${dataLabels[0]}`);
     } else if (s1 === 1 && s2 === 1) {
+      // Error on second qubit of block
       system.applyGatesWithDescription(
-        [{ name: 'X', qubits: [q1], label: `X${q1}` }],
-        `✅ Коррекция: X на q${q1}`,
+        [{ name: 'X', qubits: [q1], label: `X_{${dataLabels[1]}}` }],
+        `✅ Коррекция: X на ${dataLabels[1]}`,
         'correction'
       );
       corrected.push(q1);
-      corrections.push(`Блок ${blockIdx}: синдром (1,1) → применить X к q${q1}`);
+      corrections.push(`Блок ${blockLabels[blockIdx]}: синдром (1,1) → применить X к ${dataLabels[1]}`);
     } else if (s1 === 0 && s2 === 1) {
+      // Error on third qubit of block
       system.applyGatesWithDescription(
-        [{ name: 'X', qubits: [q2], label: `X${q2}` }],
-        `✅ Коррекция: X на q${q2}`,
+        [{ name: 'X', qubits: [q2], label: `X_{${dataLabels[2]}}` }],
+        `✅ Коррекция: X на ${dataLabels[2]}`,
         'correction'
       );
       corrected.push(q2);
-      corrections.push(`Блок ${blockIdx}: синдром (0,1) → применить X к q${q2}`);
+      corrections.push(`Блок ${blockLabels[blockIdx]}: синдром (0,1) → применить X к ${dataLabels[2]}`);
     }
   }
   
   if (corrected.length > 0) {
+    const correctedLabels = corrected.map(i => `q${i}`).join(', ');
     const correctionDescription = `✅ КОРРЕКЦИЯ БИТ-ФЛИП ОШИБОК:\n` +
       `${corrections.join('\n')}\n` +
-      `\n🔧 Применён X-гейт (переворот бита) к кубитам: ${corrected.join(', ')}\n` +
+      `\n🔧 Применён X-гейт (переворот бита) к кубитам: ${correctedLabels}\n` +
       `Действие: X|0⟩ = |1⟩, X|1⟩ = |0⟩`;
     system.logStep('correction', correctionDescription);
   } else {
@@ -256,60 +335,63 @@ export function correctBitFlipErrors(
 
 /**
  * Correct phase-flip errors based on syndrome
+ * 
+ * Syndrome interpretation (S6, S7):
+ * (0,0) → No Z error
+ * (1,0) → Z error in block 1 (q0,q1,q2)
+ * (1,1) → Z error in block 2 (q3,q4,q5)
+ * (0,1) → Z error in block 3 (q6,q7,q8)
  */
 export function correctPhaseFlipErrors(
   system: QuantumSystem,
   syndrome: [number, number]
 ): number[] {
   const corrected: number[] = [];
-  const [s1, s2] = syndrome;
-  
-  // Phase syndrome indicates which block has wrong phase
-  // Apply Z to any qubit in that block (they're entangled)
+  const [s6, s7] = syndrome;
   
   let correctionDescription = '';
   
-  if (s1 === 0 && s2 === 0) {
+  if (s6 === 0 && s7 === 0) {
     // No phase error
     correctionDescription = `✅ КОРРЕКЦИЯ ФАЗОВЫХ ОШИБОК:\n` +
       `Синдром (0,0) → фазовой ошибки нет\n` +
       `\n🎉 Коррекция не требуется`;
-  } else if (s1 === 1 && s2 === 0) {
-    // Block 0 has wrong phase relative to others - perfect correction
+  } else if (s6 === 1 && s7 === 0) {
+    // Block 1 has Z error - apply Z to q0
     system.applyGatesWithDescription(
-      [{ name: 'Z', qubits: [0], label: 'Z₀' }],
+      [{ name: 'Z', qubits: [0], label: 'Z_{q0}' }],
       '✅ Коррекция: Z на q₀',
       'correction'
     );
     corrected.push(0);
     correctionDescription = `✅ КОРРЕКЦИЯ ФАЗОВЫХ ОШИБОК:\n` +
-      `Синдром (1,0) → фазовая ошибка в блоке 0\n` +
+      `Синдром (1,0) → фазовая ошибка в блоке 1 (q₀,q₁,q₂)\n` +
       `\n🔧 Применён Z-гейт к q₀\n` +
       `Действие: Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩ (переворот фазы)\n` +
       `Благодаря запутанности, коррекция одного кубита исправляет весь блок`;
-  } else if (s1 === 1 && s2 === 1) {
-    // Block 1 has wrong phase
+  } else if (s6 === 1 && s7 === 1) {
+    // Block 2 has Z error - apply Z to q3
     system.applyGatesWithDescription(
-      [{ name: 'Z', qubits: [3], label: 'Z₃' }],
+      [{ name: 'Z', qubits: [3], label: 'Z_{q3}' }],
       '✅ Коррекция: Z на q₃',
       'correction'
     );
     corrected.push(3);
     correctionDescription = `✅ КОРРЕКЦИЯ ФАЗОВЫХ ОШИБОК:\n` +
-      `Синдром (1,1) → фазовая ошибка в блоке 1\n` +
+      `Синдром (1,1) → фазовая ошибка в блоке 2 (q₃,q₄,q₅)\n` +
       `\n🔧 Применён Z-гейт к q₃\n` +
       `Действие: Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩ (переворот фазы)\n` +
       `Благодаря запутанности, коррекция одного кубита исправляет весь блок`;
-  } else if (s1 === 0 && s2 === 1) {
-    // Block 2 has wrong phase
+  } else if (s6 === 0 && s7 === 1) {
+    // Block 3 has Z error - apply Z to q6
     system.applyGatesWithDescription(
-      [{ name: 'Z', qubits: [6], label: 'Z₆' }],
+      [{ name: 'Z', qubits: [6], label: 'Z_{q6}' }],
       '✅ Коррекция: Z на q₆',
       'correction'
     );
     corrected.push(6);
     correctionDescription = `✅ КОРРЕКЦИЯ ФАЗОВЫХ ОШИБОК:\n` +
-      `Синдром (0,1) → фазовая ошибка в блоке 2\n` +
+      `Синдром (0,1) → фазовая ошибка в блоке 3 (q₆,q₇,q₈)\n` +
       `\n🔧 Применён Z-гейт к q₆\n` +
       `Действие: Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩ (переворот фазы)\n` +
       `Благодаря запутанности, коррекция одного кубита исправляет весь блок`;
@@ -329,39 +411,46 @@ export function measureAndCorrectShor(system: QuantumSystem): {
   bitCorrected: number[];
   phaseCorrected: number[];
 } {
-  // Step 1: Measure bit-flip syndrome
+  // Step 1: Measure bit-flip syndrome using 6 ancilla qubits
   const bitFlipSyndrome = measureBitFlipSyndrome(system);
   
   // Decode syndromes for each block
-  const block0Syndrome = `(${bitFlipSyndrome[0]}, ${bitFlipSyndrome[1]})`;
-  const block1Syndrome = `(${bitFlipSyndrome[2]}, ${bitFlipSyndrome[3]})`;
-  const block2Syndrome = `(${bitFlipSyndrome[4]}, ${bitFlipSyndrome[5]})`;
+  const block1Syndrome = `(${bitFlipSyndrome[0]}, ${bitFlipSyndrome[1]})`;
+  const block2Syndrome = `(${bitFlipSyndrome[2]}, ${bitFlipSyndrome[3]})`;
+  const block3Syndrome = `(${bitFlipSyndrome[4]}, ${bitFlipSyndrome[5]})`;
   
   // Detailed measurement description
-  const bitSyndromeDescription = `🔍 ИЗМЕРЕНИЕ БИТ-ФЛИП СИНДРОМА:\n` +
-    `Алгоритм: для каждого блока из 3 кубитов измеряем четность пар.\n` +
-    `Блок 0 (q₀,q₁,q₂): синдром ${block0Syndrome} - проверка Z₀Z₁ и Z₁Z₂\n` +
-    `Блок 1 (q₃,q₄,q₅): синдром ${block1Syndrome} - проверка Z₃Z₄ и Z₄Z₅\n` +
-    `Блок 2 (q₆,q₇,q₈): синдром ${block2Syndrome} - проверка Z₆Z₇ и Z₇Z₈\n` +
+  const bitSyndromeDescription = `🔍 ИЗМЕРЕНИЕ БИТ-ФЛИП СИНДРОМА (6 ZZ стабилизаторов):\n` +
+    `Метод: Измерение через анциллы a₀-a₅\n` +
+    `Блок 1 (q₀,q₁,q₂): синдром ${block1Syndrome}\n` +
+    `  S₀ = Z_{q0}Z_{q1} → a₀ = ${bitFlipSyndrome[0]}\n` +
+    `  S₁ = Z_{q1}Z_{q2} → a₁ = ${bitFlipSyndrome[1]}\n` +
+    `Блок 2 (q₃,q₄,q₅): синдром ${block2Syndrome}\n` +
+    `  S₂ = Z_{q3}Z_{q4} → a₂ = ${bitFlipSyndrome[2]}\n` +
+    `  S₃ = Z_{q4}Z_{q5} → a₃ = ${bitFlipSyndrome[3]}\n` +
+    `Блок 3 (q₆,q₇,q₈): синдром ${block3Syndrome}\n` +
+    `  S₄ = Z_{q6}Z_{q7} → a₄ = ${bitFlipSyndrome[4]}\n` +
+    `  S₅ = Z_{q7}Z_{q8} → a₅ = ${bitFlipSyndrome[5]}\n` +
     `\n💡 Интерпретация:\n` +
-    `(0,0) → нет ошибки | (1,0) → ошибка на 1-м кубите\n` +
-    `(1,1) → ошибка на 2-м кубите | (0,1) → ошибка на 3-м кубите`;
+    `(0,0) → нет X-ошибки | (1,0) → X на 1-м кубите блока\n` +
+    `(1,1) → X на 2-м кубите | (0,1) → X на 3-м кубите`;
   
   system.logStep('measurement', bitSyndromeDescription);
   const bitCorrected = correctBitFlipErrors(system, bitFlipSyndrome);
   
-  // Step 2: Measure phase-flip syndrome
+  // Step 2: Measure phase-flip syndrome using 2 ancilla qubits
   const phaseFlipSyndrome = measurePhaseFlipSyndrome(system);
   
-  const phaseSyndromeDescription = `🔍 ИЗМЕРЕНИЕ ФАЗОВОГО СИНДРОМА:\n` +
-    `Алгоритм: проверяем согласованность фаз между блоками.\n` +
+  const phaseSyndromeDescription = `🔍 ИЗМЕРЕНИЕ ФАЗОВОГО СИНДРОМА (2 X...X стабилизатора):\n` +
+    `Метод: Измерение через анциллы a₆,a₇ в X-базисе\n` +
+    `S₆ = X_{q0}...X_{q5} → a₆ = ${phaseFlipSyndrome[0]}\n` +
+    `S₇ = X_{q3}...X_{q8} → a₇ = ${phaseFlipSyndrome[1]}\n` +
     `Синдром: (${phaseFlipSyndrome[0]}, ${phaseFlipSyndrome[1]})\n` +
     `\n💡 Интерпретация:\n` +
     `(0,0) → фазовой ошибки нет\n` +
-    `(1,0) → фазовая ошибка в блоке 0 → применить Z₀\n` +
-    `(1,1) → фазовая ошибка в блоке 1 → применить Z₃\n` +
-    `(0,1) → фазовая ошибка в блоке 2 → применить Z₆\n` +
-    `\n🎯 Метод: сравниваем относительные знаки амплитуд |000⟩ и |111⟩ в каждом блоке`;
+    `(1,0) → Z-ошибка в блоке 1 → применить Z_{q0}\n` +
+    `(1,1) → Z-ошибка в блоке 2 → применить Z_{q3}\n` +
+    `(0,1) → Z-ошибка в блоке 3 → применить Z_{q6}`;
   
   system.logStep('measurement', phaseSyndromeDescription);
   const phaseCorrected = correctPhaseFlipErrors(system, phaseFlipSyndrome);
@@ -423,14 +512,15 @@ export function runShorCodeCycle(
 
 /**
  * Create reference logical states for Shor code
+ * |0⟩_L = (|000⟩ + |111⟩)/√2 ⊗ (|000⟩ + |111⟩)/√2 ⊗ (|000⟩ + |111⟩)/√2
  */
 export function getShorLogicalZeroState(): StateVector {
-  // |0⟩_L = (|000⟩ + |111⟩)^⊗3 / 2√2
-  const sv = new StateVector(9);
+  const sv = new StateVector(17); // 9 data + 8 ancilla (all ancilla in |0⟩)
   const norm = 1 / (2 * Math.sqrt(2));
   
-  // All combinations of (000, 111) for each block
-  const patterns = [
+  // All combinations of (000, 111) for each block in data qubits (d1-d9 = indices 0-8)
+  // Ancilla qubits (indices 9-16) remain in |0⟩
+  const dataPatterns = [
     0b000000000, // 000 000 000
     0b000000111, // 000 000 111
     0b000111000, // 000 111 000
@@ -441,7 +531,8 @@ export function getShorLogicalZeroState(): StateVector {
     0b111111111, // 111 111 111
   ];
   
-  for (const p of patterns) {
+  for (const p of dataPatterns) {
+    // Data qubits in pattern, ancilla qubits in |0⟩ (bits 9-16 are 0)
     sv.amplitudes[p] = new Complex(norm);
   }
   
@@ -449,20 +540,20 @@ export function getShorLogicalZeroState(): StateVector {
 }
 
 export function getShorLogicalOneState(): StateVector {
-  // |1⟩_L = (|000⟩ - |111⟩)^⊗3 / 2√2
-  const sv = new StateVector(9);
+  const sv = new StateVector(17); // 9 data + 8 ancilla
   const norm = 1 / (2 * Math.sqrt(2));
   
-  // Pattern with signs based on parity of 111 blocks
+  // |1⟩_L = (|000⟩ - |111⟩)/√2 ⊗ (|000⟩ - |111⟩)/√2 ⊗ (|000⟩ - |111⟩)/√2
+  // Sign is (-1)^(number of 111 blocks)
   const patterns = [
-    { idx: 0b000000000, sign: 1 },   // even: +
-    { idx: 0b000000111, sign: -1 },  // odd: -
+    { idx: 0b000000000, sign: 1 },   // 0 blocks with 111: +
+    { idx: 0b000000111, sign: -1 },  // 1 block with 111: -
     { idx: 0b000111000, sign: -1 },
-    { idx: 0b000111111, sign: 1 },
+    { idx: 0b000111111, sign: 1 },   // 2 blocks with 111: +
     { idx: 0b111000000, sign: -1 },
     { idx: 0b111000111, sign: 1 },
     { idx: 0b111111000, sign: 1 },
-    { idx: 0b111111111, sign: -1 },
+    { idx: 0b111111111, sign: -1 },  // 3 blocks with 111: -
   ];
   
   for (const { idx, sign } of patterns) {
@@ -476,24 +567,24 @@ export function getShorLogicalOneState(): StateVector {
  * Syndrome lookup table for Shor code (simplified)
  */
 export const shorBitFlipSyndromeTable = [
-  { block: 0, syndrome: '(0,0)', meaning: 'No error', correction: 'None' },
-  { block: 0, syndrome: '(1,0)', meaning: 'Error on q₀', correction: 'Apply X₀' },
-  { block: 0, syndrome: '(1,1)', meaning: 'Error on q₁', correction: 'Apply X₁' },
-  { block: 0, syndrome: '(0,1)', meaning: 'Error on q₂', correction: 'Apply X₂' },
   { block: 1, syndrome: '(0,0)', meaning: 'No error', correction: 'None' },
-  { block: 1, syndrome: '(1,0)', meaning: 'Error on q₃', correction: 'Apply X₃' },
-  { block: 1, syndrome: '(1,1)', meaning: 'Error on q₄', correction: 'Apply X₄' },
-  { block: 1, syndrome: '(0,1)', meaning: 'Error on q₅', correction: 'Apply X₅' },
+  { block: 1, syndrome: '(1,0)', meaning: 'Error on q₀', correction: 'Apply X_{q0}' },
+  { block: 1, syndrome: '(1,1)', meaning: 'Error on q₁', correction: 'Apply X_{q1}' },
+  { block: 1, syndrome: '(0,1)', meaning: 'Error on q₂', correction: 'Apply X_{q2}' },
   { block: 2, syndrome: '(0,0)', meaning: 'No error', correction: 'None' },
-  { block: 2, syndrome: '(1,0)', meaning: 'Error on q₆', correction: 'Apply X₆' },
-  { block: 2, syndrome: '(1,1)', meaning: 'Error on q₇', correction: 'Apply X₇' },
-  { block: 2, syndrome: '(0,1)', meaning: 'Error on q₈', correction: 'Apply X₈' },
+  { block: 2, syndrome: '(1,0)', meaning: 'Error on q₃', correction: 'Apply X_{q3}' },
+  { block: 2, syndrome: '(1,1)', meaning: 'Error on q₄', correction: 'Apply X_{q4}' },
+  { block: 2, syndrome: '(0,1)', meaning: 'Error on q₅', correction: 'Apply X_{q5}' },
+  { block: 3, syndrome: '(0,0)', meaning: 'No error', correction: 'None' },
+  { block: 3, syndrome: '(1,0)', meaning: 'Error on q₆', correction: 'Apply X_{q6}' },
+  { block: 3, syndrome: '(1,1)', meaning: 'Error on q₇', correction: 'Apply X_{q7}' },
+  { block: 3, syndrome: '(0,1)', meaning: 'Error on q₈', correction: 'Apply X_{q8}' },
 ];
 
 export const shorPhaseFlipSyndromeTable = [
   { syndrome: '(0,0)', meaning: 'No phase error', correction: 'None' },
-  { syndrome: '(1,0)', meaning: 'Phase error in block 0', correction: 'Apply Z₀' },
-  { syndrome: '(1,1)', meaning: 'Phase error in block 1', correction: 'Apply Z₃' },
-  { syndrome: '(0,1)', meaning: 'Phase error in block 2', correction: 'Apply Z₆' },
+  { syndrome: '(1,0)', meaning: 'Phase error in block 1', correction: 'Apply Z_{q0}' },
+  { syndrome: '(1,1)', meaning: 'Phase error in block 2', correction: 'Apply Z_{q3}' },
+  { syndrome: '(0,1)', meaning: 'Phase error in block 3', correction: 'Apply Z_{q6}' },
 ];
 

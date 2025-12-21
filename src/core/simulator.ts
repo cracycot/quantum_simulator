@@ -143,6 +143,11 @@ export class QECSimulator {
         break;
     }
     
+    // For Shor code, encode immediately (like repetition code does)
+    if (config.codeType === 'shor') {
+      encodeShor(system);
+    }
+    
     this.state.phase = 'init';
     this.saveSnapshot();
   }

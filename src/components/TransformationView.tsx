@@ -201,7 +201,10 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
                 <div className="step-header">
                   <span className="step-number">#{stepNumber}</span>
                   <span className={`phase-badge phase-${step.type}`}>
-                    {getTypeLabel(step.type)}
+                    {step.type === 'correction' ? 'CORRECTION' : 
+                     step.type === 'decode' ? 'DECODE' :
+                     step.type === 'measurement' ? 'MEASUREMENT' :
+                     step.type.toUpperCase()}
                   </span>
                 </div>
                 
