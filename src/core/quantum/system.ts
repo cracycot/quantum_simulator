@@ -326,11 +326,33 @@ export class QuantumSystem {
   private simplifyState(state: StateVector, maxTerms: number = 4): string {
     const significant: Array<{ basis: string; coeff: number; phase: number; index: number }> = [];
     
-    for (let i = 0; i < state.dimension; i++) {
+    // For large systems (>10 qubits), use higher threshold and limit search
+    const threshold = state.numQubits > 10 ? 0.01 : 0.001;
+    
+    // For Shor code and other large systems, we need to scan strategically
+    // Check low indices first (most likely to have significant amplitudes)
+    const searchIndices: number[] = [];
+    if (state.numQubits > 10) {
+      // For large systems, check first 1000 indices and a sample of the rest
+      for (let i = 0; i < Math.min(1000, state.dimension); i++) {
+        searchIndices.push(i);
+      }
+      // Sample every 100th index for the rest
+      for (let i = 1000; i < state.dimension; i += 100) {
+        searchIndices.push(i);
+      }
+    } else {
+      // For small systems, check all
+      for (let i = 0; i < state.dimension; i++) {
+        searchIndices.push(i);
+      }
+    }
+    
+    for (const i of searchIndices) {
       const amp = state.amplitudes[i];
       const prob = amp.absSquared();
       
-      if (prob > 0.001) {
+      if (prob > threshold) {
         // Reverse bit order for intuitive display (q0,q1,q2,q3,q4 from left to right)
         const basisBinary = i.toString(2).padStart(state.numQubits, '0');
         const basis = basisBinary.split('').reverse().join('');
@@ -338,6 +360,9 @@ export class QuantumSystem {
         const phase = Math.atan2(amp.im, amp.re);
         significant.push({ basis, coeff, phase, index: i });
       }
+      
+      // Early exit if we have enough terms
+      if (significant.length >= maxTerms * 3) break;
     }
     
     // Sort by original state vector index for stable ordering
@@ -447,9 +472,13 @@ export class QuantumSystem {
         icon = '📊';
     }
     
+    // Skip detailed state visualization for large systems (>10 qubits) to improve performance
+    const simplifiedBefore = this.numQubits > 10 ? `[${this.numQubits}-qubit state]` : this.simplifyState(stateBefore);
+    const simplifiedAfter = this.numQubits > 10 ? `[${this.numQubits}-qubit state]` : this.simplifyState(stateAfter);
+    
     return {
-      simplifiedBefore: this.simplifyState(stateBefore),
-      simplifiedAfter: this.simplifyState(stateAfter),
+      simplifiedBefore,
+      simplifiedAfter,
       physicalMeaning: meaning,
       effect,
       icon
@@ -611,12 +640,15 @@ export class QuantumSystem {
     stateBefore: StateVector,
     stateAfter: StateVector
   ): StateTransformation | undefined {
-    // Check if state actually changed (fidelity close to 1 means no change)
-    const fidelity = stateBefore.fidelity(stateAfter);
-    // Measurement always creates transformation (to show syndrome), others only if state changed
-    if (type !== 'measurement' && fidelity > 0.9999) {
-      // State didn't change, don't create transformation
-      return undefined;
+    // For large systems, skip fidelity check (it's expensive)
+    if (this.numQubits <= 10) {
+      // Check if state actually changed (fidelity close to 1 means no change)
+      const fidelity = stateBefore.fidelity(stateAfter);
+      // Measurement always creates transformation (to show syndrome), others only if state changed
+      if (type !== 'measurement' && fidelity > 0.9999) {
+        // State didn't change, don't create transformation
+        return undefined;
+      }
     }
     
     let effect: StateTransformation['effect'] = 'encoding';
@@ -651,9 +683,13 @@ export class QuantumSystem {
         return undefined;
     }
     
+    // Skip detailed state visualization for large systems (>10 qubits) to improve performance
+    const simplifiedBefore = this.numQubits > 10 ? `[${this.numQubits}-qubit state]` : this.simplifyState(stateBefore);
+    const simplifiedAfter = this.numQubits > 10 ? `[${this.numQubits}-qubit state]` : this.simplifyState(stateAfter);
+    
     return {
-      simplifiedBefore: this.simplifyState(stateBefore),
-      simplifiedAfter: this.simplifyState(stateAfter),
+      simplifiedBefore,
+      simplifiedAfter,
       physicalMeaning: meaning,
       effect,
       icon

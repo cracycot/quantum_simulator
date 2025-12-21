@@ -505,7 +505,13 @@ export class QECSimulator {
    */
   runFullCycle(): SimulationResult {
     this.initialize();
-    this.encode();
+    
+    // For Shor code, encoding is already done in initialize()
+    // For repetition code, we need to call encode() separately
+    if (this.state.config.codeType === 'repetition') {
+      this.encode();
+    }
+    
     const errorsApplied = this.applyNoise();
     this.measureSyndrome();
     const correctedQubits = this.correct();
