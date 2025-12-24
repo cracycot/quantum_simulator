@@ -19,7 +19,10 @@ import {
 import {
   encodeShor,
   decodeShor,
-  measureAndCorrectShor,
+  measureBitFlipSyndrome,
+  measurePhaseFlipSyndrome,
+  correctBitFlipErrors,
+  correctPhaseFlipErrors,
   getShorLogicalZeroState,
   getShorLogicalOneState
 } from './codes/shor';
@@ -154,6 +157,8 @@ export class QECSimulator {
 
   /**
    * Encode logical qubit into code
+   * Note: For Shor code, encoding is already done in initialize()
+   * This method should only be called explicitly for repetition code
    */
   encode(): void {
     const { system, config } = this.state;
@@ -161,7 +166,10 @@ export class QECSimulator {
     if (config.codeType === 'repetition') {
       encodeRepetition(system);
     } else {
-      encodeShor(system);
+      // For Shor code, encoding is already done in initialize()
+      // This branch should not be reached in normal flow
+      console.warn('[Simulator] encode() called for Shor code - encoding already done in initialize()');
+      return;
     }
     
     this.state.phase = 'encode';
@@ -214,13 +222,16 @@ export class QECSimulator {
       const syndrome = measureSyndromeRepetition(system);
       this.state.syndrome = syndrome;
     } else {
-      // For Shor code, we get both syndromes
-      const { bitFlipSyndrome, phaseFlipSyndrome } = {
-        bitFlipSyndrome: [0, 0, 0, 0, 0, 0] as [number, number, number, number, number, number],
-        phaseFlipSyndrome: [0, 0] as [number, number]
-      };
-      // Actual measurement happens during correction
+      // For Shor code, measure both bit-flip and phase-flip syndromes
+      const bitFlipSyndrome = measureBitFlipSyndrome(system);
+      const phaseFlipSyndrome = measurePhaseFlipSyndrome(system);
       this.state.syndrome = [...bitFlipSyndrome, ...phaseFlipSyndrome];
+      
+      console.log('[Simulator] Shor syndromes measured:', {
+        bitFlip: bitFlipSyndrome,
+        phaseFlip: phaseFlipSyndrome,
+        combined: this.state.syndrome
+      });
     }
     
     this.state.phase = 'syndrome';
@@ -264,9 +275,19 @@ export class QECSimulator {
         system.logStep('correction', 'Ошибок не обнаружено - коррекция не требуется');
       }
     } else {
-      const result = measureAndCorrectShor(system);
-      this.state.syndrome = [...result.bitFlipSyndrome, ...result.phaseFlipSyndrome];
-      correctedQubits = [...result.bitCorrected, ...result.phaseCorrected];
+      // Shor code correction - use already measured syndromes
+      const bitFlipSyndrome = syndrome.slice(0, 6) as [number, number, number, number, number, number];
+      const phaseFlipSyndrome = syndrome.slice(6, 8) as [number, number];
+      
+      console.log('[Simulator] Correcting Shor code with syndromes:', {
+        bitFlip: bitFlipSyndrome,
+        phaseFlip: phaseFlipSyndrome
+      });
+      
+      const bitCorrected = correctBitFlipErrors(system, bitFlipSyndrome);
+      const phaseCorrected = correctPhaseFlipErrors(system, phaseFlipSyndrome);
+      
+      correctedQubits = [...bitCorrected, ...phaseCorrected];
       
       // Check for Shor code correction limits
       if (totalErrors >= 2) {
@@ -329,8 +350,13 @@ export class QECSimulator {
     // Track gate errors before applying gates
     const gateErrorsCountBefore = system.history.filter(s => s.type === 'gate-error').length;
     
-    // Calculate expected syndrome after user gates (for repetition code)
-    let expectedSyndrome: [number, number] = [0, 0];
+    // Calculate expected syndrome after user gates
+    // For Shor code: 8 elements (6 bit-flip + 2 phase-flip)
+    // For Repetition code: 2 elements
+    let expectedSyndrome: number[] = config.codeType === 'shor' 
+      ? [0, 0, 0, 0, 0, 0, 0, 0] 
+      : [0, 0];
+      
     if (config.codeType === 'repetition') {
       for (const step of plan) {
         const gateName = step.op.name;
@@ -360,12 +386,21 @@ export class QECSimulator {
         }
       }
     }
+    // For Shor code, we don't calculate expected syndrome from user gates
+    // The syndrome measurement will handle the full 9-qubit code logic
     
     console.log('[Simulator] Expected syndrome after user gates:', expectedSyndrome);
     
     // Apply each gate in sequence
     for (const step of plan) {
       this.applyCustomGate(step);
+    }
+    
+    // For Shor code: measure syndrome AFTER user gates, BEFORE noise
+    // This gives us expectedSyndrome (what syndrome SHOULD be after user gates)
+    if (config.codeType === 'shor') {
+      expectedSyndrome = [...this.measureSyndrome()];
+      console.log('[Simulator] Shor expectedSyndrome after user gates (before noise):', expectedSyndrome);
     }
     
     // Apply noise after user gates if requested
@@ -451,21 +486,38 @@ export class QECSimulator {
         this.state.phase = 'complete';
       }
     } else {
-      // Shor code
-      const result = measureAndCorrectShor(system);
-      this.state.syndrome = [...result.bitFlipSyndrome, ...result.phaseFlipSyndrome];
+      // Shor code - measure syndrome AFTER noise (measuredSyndrome)
+      const measuredSyndrome = this.measureSyndrome(); // 8 elements
+      this.state.syndrome = measuredSyndrome;
       
-      // For Shor code, check syndrome
-      const syndromeIndicatesError = this.state.syndrome.some(s => s !== 0);
+      // Calculate ERROR syndrome (measured XOR expected)
+      const errorSyndrome = measuredSyndrome.map((s, i) => s ^ expectedSyndrome[i]);
+      
+      console.log('[Simulator] Shor syndromes:', {
+        measured: measuredSyndrome,
+        expected: expectedSyndrome,
+        error: errorSyndrome
+      });
+      
+      // Check if any errors detected (non-zero error syndrome)
+      const syndromeIndicatesError = errorSyndrome.some(s => s !== 0);
       const needsCorrection = hadGateErrors || noiseApplied || syndromeIndicatesError;
       
       if (needsCorrection) {
-        console.log(`[Simulator] Errors detected (gate errors: ${hadGateErrors}, noise: ${noiseApplied}), correction applied`);
-        this.state.correctedQubits = [...result.bitCorrected, ...result.phaseCorrected];
+        console.log(`[Simulator] Errors detected (gate errors: ${hadGateErrors}, noise: ${noiseApplied}), applying correction for ERROR syndrome`);
+        
+        // Apply correction based on ERROR syndrome, not measured syndrome
+        const bitFlipError = errorSyndrome.slice(0, 6) as [number, number, number, number, number, number];
+        const phaseFlipError = errorSyndrome.slice(6, 8) as [number, number];
+        
+        const bitCorrected = correctBitFlipErrors(system, bitFlipError);
+        const phaseCorrected = correctPhaseFlipErrors(system, phaseFlipError);
+        
+        this.state.correctedQubits = [...bitCorrected, ...phaseCorrected];
         this.state.phase = 'correction';
       } else {
-        console.log('[Simulator] Syndrome measured, no errors detected');
-        system.logStep('correction', `ℹ️ Синдром измерен, изменено пользовательскими операциями`);
+        console.log('[Simulator] No errors detected, syndrome changed by user gates only');
+        system.logStep('correction', `ℹ️ Синдром изменён пользовательскими операциями (error syndrome: все 0)`);
         this.state.phase = 'complete';
       }
     }
@@ -504,17 +556,55 @@ export class QECSimulator {
    * Run full simulation cycle
    */
   runFullCycle(): SimulationResult {
+    const { config } = this.state;
     this.initialize();
     
     // For Shor code, encoding is already done in initialize()
     // For repetition code, we need to call encode() separately
-    if (this.state.config.codeType === 'repetition') {
+    if (config.codeType === 'repetition') {
       this.encode();
     }
     
+    // For Shor code: expected syndrome AFTER encoding, BEFORE noise
+    // For perfect encoded state, all syndromes should be zero
+    let expectedSyndrome: number[] = [];
+    if (config.codeType === 'shor') {
+      // Expected syndrome for perfect encoded state: all zeros (8 syndromes: 6 bit-flip + 2 phase-flip)
+      expectedSyndrome = [0, 0, 0, 0, 0, 0, 0, 0];
+      console.log('[Simulator] Expected syndrome after encoding (before noise):', expectedSyndrome);
+    }
+    
     const errorsApplied = this.applyNoise();
-    this.measureSyndrome();
-    const correctedQubits = this.correct();
+    
+    // Measure syndrome AFTER noise
+    const measuredSyndrome = this.measureSyndrome();
+    
+    // For Shor code: correct based on ERROR syndrome (measured XOR expected)
+    let correctedQubits: number[] = [];
+    if (config.codeType === 'shor') {
+      const errorSyndrome = measuredSyndrome.map((s, i) => s ^ expectedSyndrome[i]);
+      console.log('[Simulator] Shor syndromes in runFullCycle:', {
+        measured: measuredSyndrome,
+        expected: expectedSyndrome,
+        error: errorSyndrome
+      });
+      
+      // Check if any real errors detected
+      const hasErrors = errorSyndrome.some(s => s !== 0);
+      if (hasErrors) {
+        // Apply correction based on ERROR syndrome
+        const bitFlipError = errorSyndrome.slice(0, 6) as [number, number, number, number, number, number];
+        const phaseFlipError = errorSyndrome.slice(6, 8) as [number, number];
+        
+        const bitCorrected = correctBitFlipErrors(this.state.system, bitFlipError);
+        const phaseCorrected = correctPhaseFlipErrors(this.state.system, phaseFlipError);
+        
+        correctedQubits = [...bitCorrected, ...phaseCorrected];
+      }
+    } else {
+      // Repetition code: use standard correction
+      correctedQubits = this.correct();
+    }
     
     // Calculate fidelity with target logical state
     const targetState = this.getTargetState();
@@ -590,7 +680,22 @@ export class QECSimulator {
 
   private saveSnapshot(): void {
     this.state.stepIndex = this.snapshots.length;
-    this.snapshots.push(this.cloneState());
+    
+    // For large systems (>10 qubits), only save every 5th snapshot to conserve memory
+    // For Shor code (17 qubits), this reduces memory usage from ~120MB to ~24MB
+    const numQubits = this.state.system.numQubits;
+    if (numQubits > 10) {
+      const shouldSave = this.snapshots.length % 5 === 0 || 
+                         this.state.phase === 'init' || 
+                         this.state.phase === 'complete' ||
+                         this.state.phase === 'syndrome' ||
+                         this.state.phase === 'correction';
+      if (shouldSave) {
+        this.snapshots.push(this.cloneState());
+      }
+    } else {
+      this.snapshots.push(this.cloneState());
+    }
   }
 
   /**

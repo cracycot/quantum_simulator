@@ -10,10 +10,36 @@
  * |1⟩_L = (|000⟩ - |111⟩)(|000⟩ - |111⟩)(|000⟩ - |111⟩) / 2√2
  * 
  * Structure:
- * - Qubits 0,1,2: First block (protects against phase errors)
- * - Qubits 3,4,5: Second block
- * - Qubits 6,7,8: Third block
- * - Blocks protect against bit-flip errors within each block
+ * - Qubits 0,1,2: Block 1 (3-qubit repetition code for X errors)
+ * - Qubits 3,4,5: Block 2 (3-qubit repetition code for X errors)
+ * - Qubits 6,7,8: Block 3 (3-qubit repetition code for X errors)
+ * - Between blocks: phase repetition code for Z errors
+ * 
+ * Stabilizers:
+ * 
+ * BIT-FLIP (X-error) Detection - 6 ZZ stabilizers:
+ *   Block 1: S0 = Z₀Z₁, S1 = Z₁Z₂
+ *   Block 2: S2 = Z₃Z₄, S3 = Z₄Z₅
+ *   Block 3: S4 = Z₆Z₇, S5 = Z₇Z₈
+ * 
+ * PHASE-FLIP (Z-error) Detection - 2 X⊗⁶ stabilizers:
+ *   S6 = X₀X₁X₂X₃X₄X₅ (blocks 1 & 2 have same phase)
+ *   S7 = X₃X₄X₅X₆X₇X₈ (blocks 2 & 3 have same phase)
+ * 
+ * How Z-errors are detected:
+ * A Z-error on any qubit in block i flips the phase of that block:
+ *   (|000⟩ + |111⟩) → (|000⟩ - |111⟩) or vice versa
+ * This phase difference is detected by X-basis measurements (S6, S7)
+ * which compare phases between blocks.
+ * 
+ * Syndrome interpretation:
+ * - Bit-flip: (s0,s1) per block → which qubit in block has X error
+ * - Phase-flip: (s6,s7) → which block has Z error
+ * 
+ * Optimization:
+ * Uses sequential ancilla reuse: 9 data qubits + 1 physical ancilla
+ * State space: 2^10 = 1024 (instead of 2^17 = 131072 with 8 ancillas)
+ * All 8 syndrome measurements done sequentially with measure-reset cycles
  */
 import { QuantumSystem, create9QubitShorSystem } from '../quantum/system';
 import { Complex, StateVector } from '../quantum/complex';
@@ -132,90 +158,91 @@ export function decodeShor(system: QuantumSystem): void {
 }
 
 /**
- * Measure bit-flip syndromes using 6 ancilla qubits (a0-a5)
+ * Measure bit-flip syndromes using sequential ancilla reuse
  * Returns 6 syndrome bits (2 per block)
  * 
- * Measurement process:
- * 1. Ancilla in |0⟩
- * 2. CNOT(data → ancilla) for each pair
- * 3. Measure ancilla in Z basis
+ * Optimized measurement protocol (9+1 qubits instead of 9+8):
+ * For each syndrome S_k:
+ *   1. Ancilla starts in |0⟩ (or reset to |0⟩)
+ *   2. Apply CNOT(data_i → ancilla) for qubits in stabilizer
+ *   3. Measure ancilla in Z basis → s_k
+ *   4. Reset ancilla to |0⟩ for reuse
+ * 
+ * All virtual ancillas (a0-a7, indices 9-16) map to physical ancilla (index 9)
  */
 export function measureBitFlipSyndrome(system: QuantumSystem): [number, number, number, number, number, number] {
   const syndromes: number[] = [];
   
-  // Block 1 (q0,q1,q2) → ancillas a0,a1
-  // S0 = Z_q0 Z_q1 (ancilla a0 = index 9)
+  // Block 1: q0, q1, q2
+  // S0 = Z_q0 Z_q1 (virtual a0 → physical index 9)
   system.applyGatesWithDescription([
     { name: 'CNOT', qubits: [0, 9], label: 'CNOT_{q0→a0}' },
     { name: 'CNOT', qubits: [1, 9], label: 'CNOT_{q1→a0}' }
   ], '🔍 Измерение S₀ = Z_{q0}Z_{q1} через анциллу a₀', 'measurement');
+  syndromes.push(system.measureQubit(9));
+  system.resetQubit(9); // Reset physical ancilla for reuse
   
-  // Measure a0
-  const s0 = system.measureQubit(9);
-  syndromes.push(s0);
-  
-  // S1 = Z_q1 Z_q2 (ancilla a1 = index 10)
+  // S1 = Z_q1 Z_q2 (virtual a1 → physical index 9, reused after reset)
   system.applyGatesWithDescription([
     { name: 'CNOT', qubits: [1, 10], label: 'CNOT_{q1→a1}' },
     { name: 'CNOT', qubits: [2, 10], label: 'CNOT_{q2→a1}' }
   ], '🔍 Измерение S₁ = Z_{q1}Z_{q2} через анциллу a₁', 'measurement');
+  syndromes.push(system.measureQubit(10));
+  system.resetQubit(10); // Reset for next measurement
   
-  const s1 = system.measureQubit(10);
-  syndromes.push(s1);
-  
-  // Block 2 (q3,q4,q5) → ancillas a2,a3
-  // S2 = Z_q3 Z_q4 (ancilla a2 = index 11)
+  // Block 2: q3, q4, q5
+  // S2 = Z_q3 Z_q4 (virtual a2 → physical index 9, reused)
   system.applyGatesWithDescription([
     { name: 'CNOT', qubits: [3, 11], label: 'CNOT_{q3→a2}' },
     { name: 'CNOT', qubits: [4, 11], label: 'CNOT_{q4→a2}' }
   ], '🔍 Измерение S₂ = Z_{q3}Z_{q4} через анциллу a₂', 'measurement');
+  syndromes.push(system.measureQubit(11));
+  system.resetQubit(11);
   
-  const s2 = system.measureQubit(11);
-  syndromes.push(s2);
-  
-  // S3 = Z_q4 Z_q5 (ancilla a3 = index 12)
+  // S3 = Z_q4 Z_q5 (virtual a3 → physical index 9, reused)
   system.applyGatesWithDescription([
     { name: 'CNOT', qubits: [4, 12], label: 'CNOT_{q4→a3}' },
     { name: 'CNOT', qubits: [5, 12], label: 'CNOT_{q5→a3}' }
   ], '🔍 Измерение S₃ = Z_{q4}Z_{q5} через анциллу a₃', 'measurement');
+  syndromes.push(system.measureQubit(12));
+  system.resetQubit(12);
   
-  const s3 = system.measureQubit(12);
-  syndromes.push(s3);
-  
-  // Block 3 (q6,q7,q8) → ancillas a4,a5
-  // S4 = Z_q6 Z_q7 (ancilla a4 = index 13)
+  // Block 3: q6, q7, q8
+  // S4 = Z_q6 Z_q7 (virtual a4 → physical index 9, reused)
   system.applyGatesWithDescription([
     { name: 'CNOT', qubits: [6, 13], label: 'CNOT_{q6→a4}' },
     { name: 'CNOT', qubits: [7, 13], label: 'CNOT_{q7→a4}' }
   ], '🔍 Измерение S₄ = Z_{q6}Z_{q7} через анциллу a₄', 'measurement');
+  syndromes.push(system.measureQubit(13));
+  system.resetQubit(13);
   
-  const s4 = system.measureQubit(13);
-  syndromes.push(s4);
-  
-  // S5 = Z_q7 Z_q8 (ancilla a5 = index 14)
+  // S5 = Z_q7 Z_q8 (virtual a5 → physical index 9, reused)
   system.applyGatesWithDescription([
     { name: 'CNOT', qubits: [7, 14], label: 'CNOT_{q7→a5}' },
     { name: 'CNOT', qubits: [8, 14], label: 'CNOT_{q8→a5}' }
   ], '🔍 Измерение S₅ = Z_{q7}Z_{q8} через анциллу a₅', 'measurement');
-  
-  const s5 = system.measureQubit(14);
-  syndromes.push(s5);
+  syndromes.push(system.measureQubit(14));
+  system.resetQubit(14);
   
   return syndromes as [number, number, number, number, number, number];
 }
 
 /**
- * Measure phase-flip syndromes using 2 ancilla qubits (a6,a7)
+ * Measure phase-flip syndromes using sequential ancilla reuse
  * 
- * S6 = X_q0 X_q1 X_q2 X_q3 X_q4 X_q5 (ancilla a6)
- * S7 = X_q3 X_q4 X_q5 X_q6 X_q7 X_q8 (ancilla a7)
+ * S6 = X_q0 X_q1 X_q2 X_q3 X_q4 X_q5 (blocks 1 and 2)
+ * S7 = X_q3 X_q4 X_q5 X_q6 X_q7 X_q8 (blocks 2 and 3)
  * 
- * Measurement process:
+ * Measurement process (X-basis measurement):
  * 1. Prepare ancilla in |+⟩ (H gate)
- * 2. CNOT(ancilla → data) for each data qubit
+ * 2. Apply CNOT(ancilla → data) for each data qubit
  * 3. Measure ancilla in X basis (H then measure Z)
+ * 4. Reset ancilla to |0⟩ for reuse
  */
 export function measurePhaseFlipSyndrome(system: QuantumSystem): [number, number] {
+  // Use virtual ancilla indices: a6 = 15, a7 = 16
+  // These map to physical ancilla (index 9) via virtualization layer
+  
   // S6 = X_q0 X_q1 X_q2 X_q3 X_q4 X_q5 (ancilla a6 = index 15)
   // Prepare a6 in |+⟩
   system.applyGatesWithDescription([
@@ -238,8 +265,9 @@ export function measurePhaseFlipSyndrome(system: QuantumSystem): [number, number
   ], '🔍 Переход в X-базис для измерения a₆', 'measurement');
   
   const s6 = system.measureQubit(15);
+  system.resetQubit(15); // Reset for next measurement
   
-  // S7 = X_q3 X_q4 X_q5 X_q6 X_q7 X_q8 (ancilla a7 = index 16)
+  // S7 = X_q3 X_q4 X_q5 X_q6 X_q7 X_q8 (virtual a7 → physical index 9, reused)
   // Prepare a7 in |+⟩
   system.applyGatesWithDescription([
     { name: 'H', qubits: [16], label: 'H_{a7}' }
@@ -261,6 +289,7 @@ export function measurePhaseFlipSyndrome(system: QuantumSystem): [number, number
   ], '🔍 Переход в X-базис для измерения a₇', 'measurement');
   
   const s7 = system.measureQubit(16);
+  system.resetQubit(16); // Reset (though not strictly necessary as it's the last measurement)
   
   return [s6, s7];
 }
@@ -404,6 +433,26 @@ export function correctPhaseFlipErrors(
 
 /**
  * Full syndrome measurement and correction for Shor code
+ * 
+ * This function implements the complete error detection and correction cycle:
+ * 
+ * 1. Measure 6 bit-flip syndromes (ZZ stabilizers) to detect X errors
+ *    - Each block has 2 syndromes to localize X error within block
+ * 
+ * 2. Measure 2 phase-flip syndromes (X⊗⁶ stabilizers) to detect Z errors
+ *    - Compares phases between blocks to detect which block has Z error
+ * 
+ * Physical interpretation:
+ * - X error in block i: flips bit, detected by ZZ measurements within block
+ * - Z error in block i: flips phase (|000⟩+|111⟩) ↔ (|000⟩-|111⟩)
+ *   Phase flip is invisible to ZZ (both have same Z eigenvalue)
+ *   But visible to XXX...X (different X eigenvalue)
+ * 
+ * Why this works:
+ * - Inner code (3-qubit repetition per block): catches X errors
+ * - Outer code (3-block phase repetition): catches Z errors
+ * - Together: can correct any single-qubit Pauli error (X, Y, Z)
+ *   (Y = iXZ, so correcting X and Z components fixes Y)
  */
 export function measureAndCorrectShor(system: QuantumSystem): {
   bitFlipSyndrome: [number, number, number, number, number, number];

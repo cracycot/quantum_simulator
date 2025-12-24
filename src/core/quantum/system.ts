@@ -81,6 +81,7 @@ export class QuantumSystem {
   public history: QuantumStep[];
   private stepCounter: number;
   private gateErrorConfig?: GateErrorConfig;
+  public virtualQubitMap?: Map<number, number>; // Maps virtual qubit indices to physical ones
 
   constructor(numQubits: number, gateErrorConfig?: GateErrorConfig) {
     this.state = new StateVector(numQubits);
@@ -100,6 +101,23 @@ export class QuantumSystem {
 
   get numQubits(): number {
     return this.qubits.length;
+  }
+  
+  /**
+   * Map virtual qubit index to physical qubit index
+   * If no virtualization is active, returns the same index
+   */
+  private mapToPhysical(virtualIndex: number): number {
+    if (!this.virtualQubitMap) return virtualIndex;
+    return this.virtualQubitMap.get(virtualIndex) ?? virtualIndex;
+  }
+  
+  /**
+   * Map an array of virtual qubit indices to physical indices
+   */
+  private mapQubitsToPhysical(virtualQubits: number[]): number[] {
+    if (!this.virtualQubitMap) return virtualQubits;
+    return virtualQubits.map(q => this.mapToPhysical(q));
   }
 
   /**
@@ -124,7 +142,10 @@ export class QuantumSystem {
    * Initialize logical |0⟩ state
    */
   initializeLogicalZero(): void {
+    // Reset state and history
     this.state = new StateVector(this.numQubits);
+    this.history = [];
+    this.stepCounter = 0;
     
     console.log('[QuantumSystem] initializeLogicalZero, numQubits:', this.numQubits);
     
@@ -144,12 +165,10 @@ export class QuantumSystem {
       console.log('[QuantumSystem] After H + CNOTs, history length:', this.history.length);
     }
     
-    // For Shor code (17 qubits = 9 data + 8 ancilla), apply encoding immediately
-    if (this.numQubits === 17) {
-      console.log('[QuantumSystem] Initialized q₀ in |0⟩, applying Shor encoding');
-      // Import and call encodeShor here
-      // Note: This creates a circular dependency, so we'll handle it differently
-      // The encoding will be called from simulator.ts instead
+    // For Shor code (10 qubits = 9 data + 1 ancilla with virtualization)
+    // Encoding will be called from simulator.ts
+    if (this.numQubits === 10) {
+      console.log('[QuantumSystem] Initialized q₀ in |0⟩ for Shor code (encoding will be done in simulator)');
     }
   }
 
@@ -157,7 +176,11 @@ export class QuantumSystem {
    * Initialize logical |1⟩ state (apply X to first qubit)
    */
   initializeLogicalOne(): void {
+    // Reset state and history
     this.state = new StateVector(this.numQubits);
+    this.history = [];
+    this.stepCounter = 0;
+    
     // Apply X to first qubit to get |1⟩
     this.applyGatesWithDescription([
       { name: 'X', qubits: [0], label: 'X₀' }
@@ -494,10 +517,25 @@ export class QuantumSystem {
    */
   applyGate(op: GateOperation, type: QuantumStep['type'] = 'gate'): void {
     const stateBefore = this.state.clone();
-    applyGateInternal(this.state, op);
+    
+    // Map virtual qubits to physical for actual computation
+    const physicalOp: GateOperation = {
+      ...op,
+      qubits: this.mapQubitsToPhysical(op.qubits)
+    };
+    
+    applyGateInternal(this.state, physicalOp);
     const stateAfter = this.state.clone();
     
-    const qubitsStr = op.qubits.map(q => this.qubits[q]?.label || `q${q}`).join(', ');
+    // Generate labels for qubits (including virtual ancillas)
+    const qubitsStr = op.qubits.map(q => {
+      if (q < this.qubits.length) {
+        return this.qubits[q]?.label || `q${q}`;
+      } else {
+        // Virtual ancilla (for Shor code): a0-a7 (indices 9-16)
+        return `a${q - 9}`;
+      }
+    }).join(', ');
     const description = `Apply ${op.label || op.name} to ${qubitsStr}`;
     
     // Generate LaTeX for the gate operation
@@ -524,7 +562,15 @@ export class QuantumSystem {
    * Generate LaTeX formula for gate operation
    */
   private generateGateLatex(op: GateOperation): string {
-    const qubits = op.qubits.map(q => `q_{${q}}`).join(',');
+    // Generate proper labels for qubits (including virtual ancillas)
+    const qubits = op.qubits.map(q => {
+      if (q < this.qubits.length) {
+        return `q_{${q}}`;
+      } else {
+        // Virtual ancilla: a0-a7 (indices 9-16)
+        return `a_{${q - 9}}`;
+      }
+    }).join(',');
     switch (op.name) {
       case 'H':
         return `H_{${qubits}}|\\psi\\rangle = \\frac{1}{\\sqrt{2}}(|0\\rangle + |1\\rangle)`;
@@ -552,13 +598,23 @@ export class QuantumSystem {
   applyGatesWithDescription(ops: GateOperation[], description: string, type: QuantumStep['type'] = 'gate'): void {
     console.log('[QuantumSystem] applyGatesWithDescription called with', ops.length, 'gates, type:', type, 'description:', description);
     
+    // For large systems (>10 qubits), don't clone states to save memory
+    const shouldCloneStates = this.numQubits <= 10;
+    
     // Apply each gate separately to show them all on the circuit
     for (const op of ops) {
       console.log('[QuantumSystem] Applying gate:', op.name, 'to qubits:', op.qubits, 'label:', op.label);
       
-      const stateBefore = this.state.clone();
-      applyGateInternal(this.state, op);
-      const stateAfter = this.state.clone();
+      const stateBefore = shouldCloneStates ? this.state.clone() : this.state;
+      
+      // Map virtual qubits to physical for actual computation
+      const physicalOp: GateOperation = {
+        ...op,
+        qubits: this.mapQubitsToPhysical(op.qubits)
+      };
+      
+      applyGateInternal(this.state, physicalOp);
+      const stateAfter = shouldCloneStates ? this.state.clone() : this.state;
       
       // Generate transformation
       const transformation = type === 'gate' || type === 'encode'
@@ -598,12 +654,24 @@ export class QuantumSystem {
    * Measure a qubit (destructive)
    */
   measureQubit(qubitIndex: number, descriptionOverride?: string): number {
-    const stateBefore = this.state.clone();
-    const result = this.state.measureQubit(qubitIndex);
-    const stateAfter = this.state.clone();
+    // For large systems, don't clone states to save memory
+    const shouldCloneStates = this.numQubits <= 10;
+    
+    // Map virtual qubit to physical for measurement
+    const physicalIndex = this.mapToPhysical(qubitIndex);
+    
+    const stateBefore = shouldCloneStates ? this.state.clone() : this.state;
+    const result = this.state.measureQubit(physicalIndex);
+    const stateAfter = shouldCloneStates ? this.state.clone() : this.state;
+    
+    // Use virtual index for display purposes
+    const label = qubitIndex < this.qubits.length 
+      ? this.qubits[qubitIndex]?.label || `q${qubitIndex}`
+      : `a${qubitIndex - 9}`;  // Virtual ancilla label
+      
     const description =
       descriptionOverride ??
-      `Measure ${this.qubits[qubitIndex]?.label || `q${qubitIndex}`}: result = ${result}`;
+      `Measure ${label}: result = ${result}`;
     
     const transformation = this.generateStepTransformation('measurement', description, stateBefore, stateAfter);
     
@@ -613,13 +681,39 @@ export class QuantumSystem {
       stateBefore,
       stateAfter,
       measurementResult: result,
-      qubitIndex,
+      qubitIndex,  // Store virtual index for display
       timestamp: this.stepCounter++,
       transformation
     });
     
     return result;
   }
+  
+  /**
+   * Reset a qubit to |0⟩ state
+   * Used for ancilla reuse in Shor code syndrome measurements
+   */
+  resetQubit(qubitIndex: number): void {
+    // Map virtual qubit to physical
+    const physicalIndex = this.mapToPhysical(qubitIndex);
+    
+    // Measure the qubit first to collapse it
+    const result = this.state.measureQubit(physicalIndex);
+    
+    // If result is 1, apply X to flip it back to 0
+    if (result === 1) {
+      const op: GateOperation = { name: 'X', qubits: [qubitIndex], label: `Reset_${qubitIndex}` };
+      const physicalOp: GateOperation = {
+        ...op,
+        qubits: [physicalIndex]
+      };
+      applyGateInternal(this.state, physicalOp);
+    }
+    
+    // Note: We don't log this to history to avoid clutter
+    // The reset is implicit in the sequential measurement protocol
+  }
+  
 
   /**
    * Non-destructive Z-basis measurement (for syndrome extraction)
@@ -807,18 +901,66 @@ export function create5QubitRepetitionSystem(gateErrorConfig?: GateErrorConfig):
 }
 
 /**
- * Create a quantum system for 9-qubit Shor code with 8 ancilla qubits (17 total)
+ * Create a quantum system for 9-qubit Shor code with optimized ancilla reuse
+ * 
+ * Optimization: Sequential syndrome measurement with single ancilla
+ * - Physical qubits: 9 data + 1 ancilla = 10 total
+ * - Virtual representation: shows 8 ancillas (a0-a7) in UI
+ * - State space: 2^10 = 1024 (vs 2^17 = 131072 without optimization)
+ * - Memory savings: ~128x reduction
+ * 
+ * How it works:
+ * All 8 syndrome measurements are done sequentially:
+ *   For each syndrome S_k (k = 0..7):
+ *     1. Start: ancilla in |0⟩ (or |+⟩ for X-basis)
+ *     2. Entangle: apply syndrome circuit between data and ancilla
+ *     3. Measure: collapse ancilla → classical bit s_k
+ *     4. Reset: ancilla back to |0⟩ for next measurement
+ * 
+ * Virtualization mapping:
+ *   Virtual a0-a7 (indices 9-16) → Physical ancilla (index 9)
+ * 
+ * This is valid because:
+ * - After measurement, ancilla factorizes from data qubits
+ * - Measurement result stored classically
+ * - Same physical ancilla can be reused for next measurement
  */
 export function create9QubitShorSystem(gateErrorConfig?: GateErrorConfig): QuantumSystem {
-  const system = new QuantumSystem(17, gateErrorConfig); // 9 data + 8 ancilla
+  // Use only 1 physical ancilla qubit but virtualize as 8 for display
+  // Total physical: 9 data + 1 ancilla = 10 qubits
+  // State space: 2^10 = 1024 (instead of 2^17 = 131072)
+  // 
+  // All measurements are sequential, so one ancilla is sufficient:
+  // 1. Measure S0 (bit-flip) using a0 → collapse → result stored
+  // 2. Measure S1 (bit-flip) using a1 → collapse → result stored
+  // ... and so on for all 8 syndromes
+  //
+  // Virtual mapping (all virtual ancillas → single physical ancilla):
+  //   a0-a7 (indices 9-16) → physical ancilla (index 9)
+  const system = new QuantumSystem(10, gateErrorConfig);
+  
+  // Enable virtualization mode for Shor code
+  // All 8 virtual ancillas map to the same physical ancilla at index 9
+  system.virtualQubitMap = new Map([
+    [9, 9],   // a0 → ancilla (physical)
+    [10, 9],  // a1 → ancilla (physical, reused)
+    [11, 9],  // a2 → ancilla (physical, reused)
+    [12, 9],  // a3 → ancilla (physical, reused)
+    [13, 9],  // a4 → ancilla (physical, reused)
+    [14, 9],  // a5 → ancilla (physical, reused)
+    [15, 9],  // a6 → ancilla (physical, reused)
+    [16, 9],  // a7 → ancilla (physical, reused)
+  ]);
+  
   // Data qubits: q0-q8 (indices 0-8)
   for (let i = 0; i < 9; i++) {
     system.setQubitInfo(i, `q${i}`, 'data');
   }
-  // Ancilla qubits: a0-a7 (indices 9-16)
-  for (let i = 0; i < 8; i++) {
-    system.setQubitInfo(9 + i, `a${i}`, 'ancilla');
-  }
+  
+  // Physical ancilla qubit:
+  // ancilla (index 9) - reused for ALL syndrome measurements (both ZZ and XX)
+  system.setQubitInfo(9, 'a', 'ancilla');
+  
   return system;
 }
 

@@ -72,9 +72,45 @@ const App: React.FC = () => {
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Get number of qubits based on code type
-  // repetition: 3 data + 2 ancilla (honest syndrome measurement)
-  // shor: 9 data + 8 ancilla = 17 total
-  const numQubits = codeType === 'repetition' ? 5 : 17;
+  // Physical qubits for calculations:
+  // repetition: 3 data + 2 ancilla = 5
+  // shor: 9 data + 1 ancilla (reused for all measurements) = 10
+  const physicalQubits = codeType === 'repetition' ? 5 : 10;
+  
+  // Display qubits for visualization (show all 8 ancillas for Shor even though we use only 1):
+  // repetition: 5 (same as physical)
+  // shor: 9 data + 8 ancilla (virtual) = 17 for display
+  const displayQubits = codeType === 'repetition' ? 5 : 17;
+  
+  // For Bloch spheres and state display, use physical qubits
+  const numQubits = physicalQubits;
+  
+  // Create virtual qubit labels for display (for Shor code, show all 8 ancillas)
+  const getDisplayQubitLabels = (system: any) => {
+    const labels = system.qubits.map((q: any) => q.label);
+    if (codeType === 'shor' && labels.length === 10) {
+      // Physical: q0-q8, a (10 qubits)
+      // Virtual display: q0-q8, a0-a7 (17 qubits)
+      return [
+        ...labels.slice(0, 9),  // q0-q8
+        'a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'  // 8 ancillas for display
+      ];
+    }
+    return labels;
+  };
+  
+  const getDisplayQubitRoles = (system: any) => {
+    const roles = system.qubits.map((q: any) => q.role);
+    if (codeType === 'shor' && roles.length === 10) {
+      // Show all 8 ancillas as regular ancilla role
+      return [
+        ...roles.slice(0, 9),  // data qubits (q0-q8)
+        'ancilla', 'ancilla', 'ancilla', 'ancilla',  // a0-a3
+        'ancilla', 'ancilla', 'ancilla', 'ancilla'   // a4-a7
+      ];
+    }
+    return roles;
+  };
 
   // Initialize simulator - only when code type or initial state changes
   const initializeSimulator = useCallback(() => {
@@ -159,7 +195,8 @@ const App: React.FC = () => {
   // Calculate expected syndrome after user gates (for syndrome table interpretation)
   const calculateExpectedSyndrome = useCallback(() => {
     if (customGatePlan.length === 0 || codeType !== 'repetition') {
-      return [0, 0];
+      // For Shor code, return 8-element array (6 bit-flip + 2 phase-flip syndromes)
+      return codeType === 'shor' ? [0, 0, 0, 0, 0, 0, 0, 0] : [0, 0];
     }
     
     let s0 = 0, s1 = 0;
@@ -260,7 +297,15 @@ const App: React.FC = () => {
       setIsPlaying(false); // Don't auto-play for custom gates
     } else {
       console.log('[App] Play: Running standard simulation with noise');
-      // Standard simulation flow
+      // Standard simulation flow - run full cycle (encode → noise → measure → correct → decode)
+      try {
+        sim.runFullCycle();
+        console.log('[App] Full cycle completed, final history length:', sim.getHistory().length);
+        console.log('[App] Final phase:', sim.getPhase());
+      } catch (error) {
+        console.error('[App] Error running full cycle:', error);
+      }
+      
       setSimulator(sim);
       setPhase(sim.getPhase());
       setCurrentStep(sim.getHistory().length);
@@ -544,11 +589,13 @@ const App: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   {simulator && (
                     <QuantumCircuit
-                      numQubits={numQubits}
+                      numQubits={displayQubits}
+                      physicalQubits={physicalQubits}
                       steps={simulator.getHistory()}
                       currentStep={currentStep}
-                      qubitLabels={simulator.getState().system.qubits.map(q => q.label)}
-                      qubitRoles={simulator.getState().system.qubits.map(q => q.role)}
+                      qubitLabels={getDisplayQubitLabels(simulator.getState().system)}
+                      qubitRoles={getDisplayQubitRoles(simulator.getState().system)}
+                      virtualQubitMap={simulator.getState().system.virtualQubitMap}
                       isDroppable={activeConfigTab === 'gate-error'}
                       onGateDrop={handleGateDrop}
                       pendingTwoQubitGate={pendingTwoQubitGate}

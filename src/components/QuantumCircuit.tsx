@@ -17,11 +17,13 @@ interface CircuitGate {
 }
 
 interface QuantumCircuitProps {
-  numQubits: number;
+  numQubits: number; // Number of qubits to display (may include virtual ancillas)
+  physicalQubits?: number; // Actual number of physical qubits in the system
   steps: QuantumStep[];
   currentStep?: number;
   qubitLabels?: string[];
   qubitRoles?: Array<'data' | 'ancilla' | 'syndrome'>; // Roles of qubits (data, ancilla, syndrome)
+  virtualQubitMap?: Map<number, number>; // Maps virtual qubit indices to physical ones (for ancilla reuse optimization)
   onGateClick?: (step: number) => void;
   // Drag and drop support
   isDroppable?: boolean;
@@ -370,10 +372,12 @@ const MeasurementGate: React.FC<{
 
 export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
   numQubits,
+  physicalQubits,
   steps,
   currentStep,
   qubitLabels,
   qubitRoles,
+  virtualQubitMap,
   onGateClick,
   isDroppable = false,
   onGateDrop,
@@ -538,7 +542,8 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
         {/* Main circuit content - shifted down by phaseLabelsHeight */}
         <g transform={`translate(0, ${phaseLabelsHeight})`}>
         {/* Qubit wires and labels */}
-        {Array.from({ length: numQubits }, (_, i) => (
+        {Array.from({ length: numQubits }, (_, i) => {
+          return (
           <g key={`wire-${i}`}>
             {/* Visual indicator for drag-over */}
             {isDroppable && isDragging && draggedOverQubit === i && (
@@ -573,6 +578,50 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             >
               |{qubitLabels?.[i] ?? `q${i}`}⟩
             </text>
+            
+            {/* Virtual ancilla indicator (for Shor code optimization) */}
+            {virtualQubitMap && virtualQubitMap.has(i) && (
+              <g>
+                {/* Dotted line overlay to indicate virtual ancilla */}
+                <line
+                  x1={padding.left - 30}
+                  y1={getQubitY(i)}
+                  x2={width - padding.right}
+                  y2={getQubitY(i)}
+                  stroke="#f59e0b"
+                  strokeWidth={1}
+                  strokeDasharray="2,4"
+                  opacity={0.6}
+                />
+                {/* Info icon */}
+                <g>
+                  <circle
+                    cx={padding.left - 10}
+                    cy={getQubitY(i)}
+                    r={7}
+                    fill="#f59e0b"
+                    opacity={0.8}
+                  />
+                  <text
+                    x={padding.left - 10}
+                    y={getQubitY(i) + 4}
+                    textAnchor="middle"
+                    fill="#1e293b"
+                    fontSize={10}
+                    fontWeight="bold"
+                    fontFamily="monospace"
+                  >
+                    v
+                  </text>
+                  {/* Tooltip on hover */}
+                  <title>
+                    Virtual ancilla: maps to physical ancilla at index {virtualQubitMap.get(i)}
+                    {'\n'}(Sequential measurement with reset)
+                  </title>
+                </g>
+              </g>
+            )}
+            
             {/* Pending two-qubit gate indicator */}
             {isDroppable && pendingTwoQubitGate && (
               <>
@@ -589,7 +638,8 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
               </>
             )}
           </g>
-        ))}
+          );
+        })}
         
         {/* Column separators removed - using PhaseLabels instead */}
         
