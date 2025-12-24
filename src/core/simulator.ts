@@ -396,11 +396,11 @@ export class QECSimulator {
       this.applyCustomGate(step);
     }
     
-    // For Shor code: measure syndrome AFTER user gates, BEFORE noise
-    // This gives us expectedSyndrome (what syndrome SHOULD be after user gates)
+    // For Shor code: expectedSyndrome without errors should be all zeros
+    // We don't measure here to avoid creating MEASUREMENT block before NOISE
     if (config.codeType === 'shor') {
-      expectedSyndrome = [...this.measureSyndrome()];
-      console.log('[Simulator] Shor expectedSyndrome after user gates (before noise):', expectedSyndrome);
+      expectedSyndrome = [0, 0, 0, 0, 0, 0, 0, 0]; // All syndromes = 0 when no errors
+      console.log('[Simulator] Shor expectedSyndrome (no errors):', expectedSyndrome);
     }
     
     // Apply noise after user gates if requested
