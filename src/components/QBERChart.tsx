@@ -1,6 +1,3 @@
-/**
- * QBER (Quantum Bit Error Rate) Chart Component
- */
 import React, { useMemo } from 'react';
 import {
   LineChart,
@@ -31,7 +28,7 @@ export const QBERChart: React.FC<QBERChartProps> = ({
   showTheoreticalCurves = true,
   codeType = 'both'
 }) => {
-  // Generate theoretical curves
+  
   const theoreticalData = useMemo(() => {
     const points: Array<{
       physicalError: number;
@@ -50,8 +47,7 @@ export const QBERChart: React.FC<QBERChartProps> = ({
     }
     return points;
   }, []);
-
-  // Format experimental data if provided
+  
   const experimentalData = useMemo(() => {
     if (!data) return null;
     return data.map(d => ({
@@ -60,12 +56,10 @@ export const QBERChart: React.FC<QBERChartProps> = ({
       label: d.label
     }));
   }, [data]);
-
-  // Merge data for chart
+  
   const chartData = useMemo(() => {
     if (!experimentalData) return theoreticalData;
     
-    // Combine theoretical and experimental
     const combined = [...theoreticalData];
     experimentalData.forEach(exp => {
       const idx = combined.findIndex(t => Math.abs(t.physicalError - exp.physicalError) < 0.5);
@@ -128,10 +122,10 @@ export const QBERChart: React.FC<QBERChartProps> = ({
             <Tooltip content={<CustomTooltip />} />
             <Legend wrapperStyle={{ paddingTop: '20px' }} />
             
-            {/* Threshold line at 50% */}
+            {}
             <ReferenceLine y={50} stroke="#ef4444" strokeDasharray="5 5" />
             
-            {/* No correction (physical = logical) */}
+            {}
             <Line
               type="monotone"
               dataKey="noCorrection"
@@ -142,7 +136,7 @@ export const QBERChart: React.FC<QBERChartProps> = ({
               dot={false}
             />
             
-            {/* Repetition code theoretical */}
+            {}
             {showTheoreticalCurves && (codeType === 'repetition' || codeType === 'both') && (
               <Line
                 type="monotone"
@@ -154,7 +148,7 @@ export const QBERChart: React.FC<QBERChartProps> = ({
               />
             )}
             
-            {/* Shor code theoretical */}
+            {}
             {showTheoreticalCurves && (codeType === 'shor' || codeType === 'both') && (
               <Line
                 type="monotone"
@@ -166,7 +160,7 @@ export const QBERChart: React.FC<QBERChartProps> = ({
               />
             )}
             
-            {/* Experimental data */}
+            {}
             {experimentalData && (
               <Line
                 type="monotone"
@@ -181,7 +175,7 @@ export const QBERChart: React.FC<QBERChartProps> = ({
         </ResponsiveContainer>
       </div>
 
-      {/* Explanation */}
+      {}
       <div className="mt-4 p-4 bg-slate-900/50 rounded-xl">
         <h4 className="text-sm font-medium text-slate-300 mb-2">Интерпретация графика:</h4>
         <ul className="text-xs text-slate-400 space-y-1">
@@ -195,9 +189,6 @@ export const QBERChart: React.FC<QBERChartProps> = ({
   );
 };
 
-/**
- * Mini QBER indicator
- */
 interface QBERIndicatorProps {
   physicalError: number;
   logicalError: number;
@@ -207,12 +198,12 @@ export const QBERIndicator: React.FC<QBERIndicatorProps> = ({
   physicalError,
   logicalError
 }) => {
-  // Determine color based on logical error value
+  
   const getLogicalErrorColor = () => {
-    if (logicalError < 0.01) return 'text-green-400'; // 0% - success
-    if (logicalError > 0.99) return 'text-red-400';   // 100% - complete failure
-    if (logicalError < physicalError) return 'text-green-400'; // Improvement
-    return 'text-amber-400'; // Partial failure
+    if (logicalError < 0.01) return 'text-green-400'; 
+    if (logicalError > 0.99) return 'text-red-400';   
+    if (logicalError < physicalError) return 'text-green-400'; 
+    return 'text-amber-400'; 
   };
   
   return (
@@ -232,4 +223,3 @@ export const QBERIndicator: React.FC<QBERIndicatorProps> = ({
 };
 
 export default QBERChart;
-

@@ -1,6 +1,3 @@
-/**
- * Control Panel for QEC Simulator
- */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -18,17 +15,15 @@ import type { GateErrorConfig, GateErrorType } from '../core/noise/gateErrors';
 import type { CustomGateStep } from '../types/gatePlan';
 
 interface ControlPanelProps {
-  // Code selection
+  
   codeType: CodeType;
   onCodeTypeChange: (type: CodeType) => void;
   
-  // Noise settings
   noiseType: NoiseType;
   onNoiseTypeChange: (type: NoiseType) => void;
   errorCount: number;
   onErrorCountChange: (count: number) => void;
   
-  // Gate errors
   gateErrorConfig: GateErrorConfig;
   onGateErrorConfigChange: (config: GateErrorConfig) => void;
   customGatePlan: CustomGateStep[];
@@ -41,7 +36,6 @@ interface ControlPanelProps {
   pendingTwoQubitGate: { gateName: string; firstQubit: number } | null;
   onPendingTwoQubitGateChange: (gate: { gateName: string; firstQubit: number } | null) => void;
   
-  // Playback controls
   phase: SimulationPhase;
   onPlay: () => void;
   onPause: () => void;
@@ -49,7 +43,6 @@ interface ControlPanelProps {
   onStepBackward: () => void;
   onReset: () => void;
   
-  // Navigation state
   currentStep: number;
   totalSteps: number;
   
@@ -109,12 +102,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   const canGoBack = currentStep > 0;
   const canGoForward = currentStep < totalSteps;
 
-  const perGateErrorProb = gateErrorConfig.probability * 100; // percent
+  const perGateErrorProb = gateErrorConfig.probability * 100; 
   const perGateErrorType = gateErrorConfig.type;
   
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 space-y-6">
-      {/* Header */}
+      {}
       <div className="space-y-2">
         <h2 className="text-lg font-bold text-white flex items-center gap-2">
           <Shield className="w-5 h-5 text-cyan-400 flex-shrink-0" />
@@ -135,7 +128,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         )}
       </div>
 
-      {/* Code Selection */}
+      {}
       <div className="space-y-2">
         <label className="text-sm text-slate-400 font-medium">Код коррекции</label>
         <div className="grid grid-cols-2 gap-2">
@@ -164,7 +157,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         </div>
       </div>
 
-      {/* Noise / Gate error settings */}
+      {}
       <div className="space-y-4 p-4 bg-slate-900/50 rounded-xl">
         <div className="flex flex-col gap-2">
           <div className="flex gap-2">
@@ -214,7 +207,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               ))}
             </div>
 
-            {/* Error count selector */}
+            {}
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Количество ошибок</span>
@@ -246,7 +239,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Палитра гейтов (draggable) */}
+            {}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
               <div className="text-sm text-slate-300 font-medium">Палитра гейтов</div>
@@ -265,7 +258,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 </p>
               </div>
               
-              {/* Однокубитные гейты */}
+              {}
               <div className="grid grid-cols-5 gap-1.5">
                 {['H','X','Y','Z','S','T','Rx','Ry','Rz'].map((g) => (
                   <div
@@ -284,7 +277,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 ))}
               </div>
               
-              {/* Двухкубитные гейты */}
+              {}
               <div className="grid grid-cols-3 gap-1.5">
                 {['CNOT','CZ','SWAP'].map((g) => (
                     <div
@@ -304,7 +297,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               </div>
             </div>
 
-            {/* Предупреждение о активных ошибках гейтов */}
+            {}
             {perGateErrorProb > 0 && (
               <div className="p-2 bg-orange-500/20 border border-orange-500/40 rounded-lg">
                 <div className="flex items-center gap-2">
@@ -316,7 +309,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               </div>
             )}
 
-            {/* Настройки ошибок по умолчанию */}
+            {}
             <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg">
               <div className="text-xs text-slate-400 font-medium">Настройки ошибок по умолчанию</div>
               <div className="space-y-2">
@@ -420,7 +413,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   Dep
                 </button>
               </div>
-              {/* Кнопка сброса настроек ошибок */}
+              {}
               {perGateErrorProb > 0 && (
                 <button
                   type="button"
@@ -437,7 +430,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               )}
             </div>
 
-            {/* Информация о схеме */}
+            {}
             <div className="space-y-2 p-2 bg-slate-800/30 rounded-lg">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-slate-400">Схема: {customGatePlan.length} гейтов</span>
@@ -450,7 +443,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               </p>
             </div>
 
-            {/* Индикатор ожидания второго кубита */}
+            {}
             {pendingTwoQubitGate && (
               <div className="bg-amber-500/20 border border-amber-500/50 rounded-lg p-2 text-xs text-amber-200">
                 Выберите второй кубит для {pendingTwoQubitGate.gateName} (первый: q{pendingTwoQubitGate.firstQubit})
@@ -466,7 +459,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         )}
       </div>
 
-      {/* Playback Controls */}
+      {}
       <div className="flex items-center justify-center gap-2 pt-4 border-t border-slate-700">
         <motion.button
           whileHover={canGoBack ? { scale: 1.1 } : {}}
@@ -515,7 +508,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         </motion.button>
       </div>
       
-      {/* Step indicator */}
+      {}
       {totalSteps > 0 && (
         <div className="text-center text-xs text-slate-500">
           Шаг {currentStep} из {totalSteps}
@@ -526,4 +519,3 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 };
 
 export default ControlPanel;
-

@@ -10,47 +10,43 @@ interface TransformationViewProps {
 
 const ITEMS_PER_PAGE = 3;
 
-// Determine badge type based on effect
 function getBadgeType(step: QuantumStep, transformation: any): string {
-  // Check if this is a user gate
+  
   if (step.description.toLowerCase().includes('user gate:')) {
-    return 'gate'; // Orange color for user gates
+    return 'gate'; 
   }
   
   const effect = transformation.effect;
   
-  // Map effect to phase badge type
   switch (effect) {
     case 'superposition':
     case 'entanglement':
     case 'encoding':
-      return 'encode'; // ENCODE phase (blue) - все gate операции
+      return 'encode'; 
     case 'error':
-      return 'noise'; // NOISE/ERROR phase (red)
+      return 'noise'; 
     case 'measurement':
-      return 'measurement'; // MEASUREMENT phase (purple)
+      return 'measurement'; 
     case 'correction':
-      return 'correction'; // CORRECTION phase (green)
+      return 'correction'; 
     default:
-      return step.type; // fallback to step type
+      return step.type; 
   }
 }
 
-// Determine badge label based on effect
 function getBadgeLabel(step: QuantumStep, transformation: any): string {
-  // Check if this is a user gate
+  
   if (step.description.toLowerCase().includes('user gate:')) {
     return 'GATES';
   }
   
   const effect = transformation.effect;
   
-  // Map effect to badge label
   switch (effect) {
     case 'superposition':
     case 'entanglement':
     case 'encoding':
-      return 'ENCODE'; // Все gate операции (H, CNOT, X, Y, Z, и т.д.)
+      return 'ENCODE'; 
     case 'error':
       return 'NOISE/ERROR';
     case 'measurement':
@@ -65,7 +61,6 @@ function getBadgeLabel(step: QuantumStep, transformation: any): string {
 export function TransformationView({ steps, currentStepIndex = -1, qubitLabels = [] }: TransformationViewProps) {
   console.log('[TransformationView] Received steps:', steps.length);
   
-  // Log user gates
   const userGates = steps.filter(s => s.description.toLowerCase().includes('user gate:'));
   console.log('[TransformationView] User gates found:', userGates.length);
   userGates.forEach((gate, i) => {
@@ -75,7 +70,6 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
     }
   });
   
-  // Фильтруем шаги: с трансформациями ИЛИ важные текстовые логи (предупреждения)
   const transformationSteps = steps.filter(step => {
     const hasTransformation = !!step.transformation;
     const isImportantLog = step.description.includes('⚠️') || 
@@ -93,18 +87,15 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
   console.log('[TransformationView] User gates in transformationSteps:', 
     transformationSteps.filter(s => s.description.toLowerCase().includes('user gate:')).length);
   
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(0);
   const totalPages = Math.ceil(transformationSteps.length / ITEMS_PER_PAGE);
   
-  // Auto-navigate to last page when new transformations are added
   React.useEffect(() => {
     if (totalPages > 0 && currentPage >= totalPages) {
       setCurrentPage(totalPages - 1);
     }
   }, [totalPages, currentPage]);
   
-  // Calculate visible items
   const startIdx = currentPage * ITEMS_PER_PAGE;
   const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, transformationSteps.length);
   const visibleSteps = transformationSteps.slice(startIdx, endIdx);
@@ -132,7 +123,7 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
 
   return (
     <div className="transformation-view">
-      {/* Header with title, counters and navigation */}
+      {}
       <div className="transformation-header">
         <h3 className="transformation-title">📜 История трансформаций</h3>
         <div className="pagination-info">
@@ -184,14 +175,13 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
         </div>
       </div>
 
-      {/* Transformation content */}
+      {}
       <div className="transformation-list">
         {visibleSteps.map((step, idx) => {
           const globalIdx = startIdx + idx;
           const isActive = globalIdx === currentStepIndex;
           const stepNumber = globalIdx + 1;
           
-          // Check if this is a text-only log (no transformation)
           if (!step.transformation) {
             return (
               <div 
@@ -222,7 +212,7 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
                key={step.timestamp} 
                className={`transformation-step ${isActive ? 'active' : ''} effect-${t.effect}`}
              >
-               {/* Фаза и номер */}
+               {}
                <div className="step-header">
                  <span className="step-number">#{stepNumber}</span>
                  <span className={`phase-badge phase-${getBadgeType(step, t)}`}>
@@ -230,7 +220,7 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
                  </span>
                </div>
 
-              {/* Операция */}
+              {}
               <div className="operation-info">
                 <span className="operation-icon">{t.icon}</span>
                 <span className="operation-name">
@@ -239,7 +229,7 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
                 </span>
               </div>
 
-              {/* Трансформация состояния */}
+              {}
               <div className="state-transformation">
                 <div className="state-row">
                   <span className="state-label">До:</span>
@@ -252,13 +242,13 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
                 </div>
               </div>
 
-              {/* Физический смысл */}
+              {}
               <div className={`physical-meaning effect-${t.effect}`}>
                 <span className="meaning-icon">💡</span>
                 <span className="meaning-text">{t.physicalMeaning}</span>
               </div>
 
-              {/* Описание */}
+              {}
               {step.description && step.description !== step.operation?.name && (
                 <div className="step-description">
                   {step.description}
@@ -271,4 +261,3 @@ export function TransformationView({ steps, currentStepIndex = -1, qubitLabels =
     </div>
   );
 }
-

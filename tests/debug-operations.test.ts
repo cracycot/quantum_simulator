@@ -1,14 +1,9 @@
-/**
- * Отладочный тест для анализа операций в runFullCycle
- */
-
 import { QECSimulator } from '../src/core/simulator';
 import type { SimulatorConfig } from '../src/core/simulator';
 
 console.log('\n🔍 АНАЛИЗ ОПЕРАЦИЙ В СИМУЛЯЦИИ');
 console.log('═'.repeat(70));
 
-// Тест с 3-кубитным кодом
 const config3: SimulatorConfig = {
   codeType: 'repetition',
   initialState: 'zero',
@@ -34,7 +29,6 @@ const result3 = sim3.runFullCycle();
 
 console.log(`\nВсего операций: ${result3.steps.length}`);
 
-// Группировка по типам операций
 const stepsByType = result3.steps.reduce((acc, step) => {
   acc[step.type] = (acc[step.type] || 0) + 1;
   return acc;
@@ -45,7 +39,6 @@ Object.entries(stepsByType).forEach(([type, count]) => {
   console.log(`  ${type}: ${count}`);
 });
 
-// Список всех гейтов
 console.log('\nДетали операций:');
 result3.steps.forEach((step, idx) => {
   if (step.type === 'gate') {
@@ -60,7 +53,6 @@ result3.steps.forEach((step, idx) => {
   }
 });
 
-// Тест с кодом Шора
 console.log('\n\n📊 Код Шора (9 кубитов):');
 console.log('─'.repeat(70));
 
@@ -111,8 +103,3 @@ resultShor.steps.slice(0, 20).forEach((step, idx) => {
 });
 
 console.log('\n═'.repeat(70));
-
-
-
-
-

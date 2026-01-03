@@ -1,6 +1,3 @@
-/**
- * Noise models for quantum error simulation
- */
 import { QuantumSystem } from '../quantum/system';
 
 export type NoiseType = 'bit-flip' | 'phase-flip' | 'bit-phase-flip' | 'depolarizing' | 'none';
@@ -8,10 +5,10 @@ export type NoiseMode = 'probability' | 'exact-count';
 
 export interface NoiseConfig {
   type: NoiseType;
-  probability: number; // Probability of error per qubit (for 'probability' mode)
-  mode?: NoiseMode; // 'probability' (default) or 'exact-count'
-  exactCount?: number; // Exact number of errors to apply (for 'exact-count' mode)
-  targetQubits?: number[]; // Specific qubits to apply noise (undefined = all)
+  probability: number; 
+  mode?: NoiseMode; 
+  exactCount?: number; 
+  targetQubits?: number[]; 
 }
 
 export interface NoiseEvent {
@@ -20,9 +17,6 @@ export interface NoiseEvent {
   applied: boolean;
 }
 
-/**
- * Apply bit-flip (X) error to a qubit with given probability
- */
 export function applyBitFlip(system: QuantumSystem, qubitIndex: number, probability: number): boolean {
   if (Math.random() < probability) {
     system.applyGate({ name: 'X', qubits: [qubitIndex], label: `X${qubitIndex} (noise)` }, 'noise');
@@ -31,9 +25,6 @@ export function applyBitFlip(system: QuantumSystem, qubitIndex: number, probabil
   return false;
 }
 
-/**
- * Apply phase-flip (Z) error to a qubit with given probability
- */
 export function applyPhaseFlip(system: QuantumSystem, qubitIndex: number, probability: number): boolean {
   if (Math.random() < probability) {
     system.applyGate({ name: 'Z', qubits: [qubitIndex], label: `Z${qubitIndex} (noise)` }, 'noise');
@@ -42,9 +33,6 @@ export function applyPhaseFlip(system: QuantumSystem, qubitIndex: number, probab
   return false;
 }
 
-/**
- * Apply combined bit-phase-flip (Y) error to a qubit with given probability
- */
 export function applyBitPhaseFlip(system: QuantumSystem, qubitIndex: number, probability: number): boolean {
   if (Math.random() < probability) {
     system.applyGate({ name: 'Y', qubits: [qubitIndex], label: `Y${qubitIndex} (noise)` }, 'noise');
@@ -53,11 +41,6 @@ export function applyBitPhaseFlip(system: QuantumSystem, qubitIndex: number, pro
   return false;
 }
 
-/**
- * Apply depolarizing channel to a qubit
- * With probability p: apply X, Y, or Z each with probability p/3
- * With probability 1-p: no error
- */
 export function applyDepolarizing(system: QuantumSystem, qubitIndex: number, probability: number): 'X' | 'Y' | 'Z' | 'none' {
   const r = Math.random();
   
@@ -75,31 +58,27 @@ export function applyDepolarizing(system: QuantumSystem, qubitIndex: number, pro
   return 'none';
 }
 
-/**
- * Apply noise to the quantum system based on configuration
- */
 export function applyNoise(system: QuantumSystem, config: NoiseConfig): NoiseEvent[] {
   const events: NoiseEvent[] = [];
-  // Filter out ancilla qubits - they should not have noise applied to them
+  
   const allQubits = config.targetQubits ?? Array.from({ length: system.numQubits }, (_, i) => i);
   const qubits = allQubits.filter(i => system.qubits[i]?.role === 'data');
   const mode = config.mode ?? 'probability';
   
   if (config.type === 'none') {
-    // No noise - return empty events
+    
     return allQubits.map(q => ({ qubitIndex: q, errorType: 'none' as const, applied: false }));
   }
   
   if (mode === 'exact-count' && config.exactCount !== undefined) {
-    // Exact count mode: apply errors to exactly N random qubits (data qubits only)
+    
     const count = Math.min(config.exactCount, qubits.length);
     const shuffled = [...qubits].sort(() => Math.random() - 0.5);
     const selectedQubits = new Set(shuffled.slice(0, count));
     
-    // Apply noise to data qubits
     for (const qubitIndex of qubits) {
       if (selectedQubits.has(qubitIndex)) {
-        // Apply error to this qubit (probability = 1)
+        
         let errorType: NoiseEvent['errorType'] = 'none';
         
         switch (config.type) {
@@ -125,14 +104,13 @@ export function applyNoise(system: QuantumSystem, config: NoiseConfig): NoiseEve
       }
     }
     
-    // Add events for ancilla qubits (no noise applied)
     for (const qubitIndex of allQubits) {
       if (system.qubits[qubitIndex]?.role !== 'data') {
         events.push({ qubitIndex, errorType: 'none', applied: false });
       }
     }
   } else {
-    // Probability mode: each qubit independently has probability p of error (data qubits only)
+    
     for (const qubitIndex of qubits) {
       let errorType: NoiseEvent['errorType'] = 'none';
       let applied = false;
@@ -162,7 +140,6 @@ export function applyNoise(system: QuantumSystem, config: NoiseConfig): NoiseEve
       events.push({ qubitIndex, errorType, applied });
     }
     
-    // Add events for ancilla qubits (no noise applied)
     for (const qubitIndex of allQubits) {
       if (system.qubits[qubitIndex]?.role !== 'data') {
         events.push({ qubitIndex, errorType: 'none', applied: false });
@@ -173,9 +150,6 @@ export function applyNoise(system: QuantumSystem, config: NoiseConfig): NoiseEve
   return events;
 }
 
-/**
- * Apply specific error to a specific qubit (for manual error injection)
- */
 export function injectError(
   system: QuantumSystem, 
   qubitIndex: number, 
@@ -188,9 +162,6 @@ export function injectError(
   }, 'noise');
 }
 
-/**
- * Apply multiple errors at once
- */
 export function injectErrors(
   system: QuantumSystem,
   errors: Array<{ qubit: number; type: 'X' | 'Y' | 'Z' }>
@@ -200,31 +171,18 @@ export function injectErrors(
   }
 }
 
-/**
- * Calculate theoretical logical error rate for repetition code
- * p_L = 3p^2(1-p) + p^3 ≈ 3p^2 for small p (probability of 2+ errors)
- */
 export function repetitionLogicalErrorRate(physicalErrorRate: number): number {
   const p = physicalErrorRate;
-  // Probability of 2 or more errors
+  
   return 3 * p * p * (1 - p) + p * p * p;
 }
 
-/**
- * Calculate theoretical logical error rate for Shor code (simplified)
- * Shor code protects against X, Y, and Z errors simultaneously
- * Better than repetition code at low error rates
- */
 export function shorLogicalErrorRate(physicalErrorRate: number): number {
   const p = physicalErrorRate;
-  // Shor code: ~p² improvement (better than repetition's 3p²)
-  // Simplified approximation for visualization
+  
   return p * p * (1 + 2 * p);
 }
 
-/**
- * Generate noise description for UI
- */
 export function getNoiseDescription(config: NoiseConfig): string {
   if (config.type === 'none') {
     return 'No noise';
@@ -247,4 +205,3 @@ export function getNoiseDescription(config: NoiseConfig): string {
       return 'Unknown noise type';
   }
 }
-

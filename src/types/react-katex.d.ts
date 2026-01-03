@@ -10,4 +10,3 @@ declare module 'react-katex' {
   export const InlineMath: FC<KaTeXProps>;
   export const BlockMath: FC<KaTeXProps>;
 }
-

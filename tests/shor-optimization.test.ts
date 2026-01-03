@@ -1,12 +1,3 @@
-/**
- * Test suite for optimized 9-qubit Shor code
- * Verifies:
- * 1. Sequential ancilla reuse reduces state space from 2^17 to 2^10
- * 2. Reset operations work correctly between measurements
- * 3. Syndrome measurements produce correct results
- * 4. Virtual-to-physical mapping is correct
- */
-
 import { create9QubitShorSystem } from '../src/core/quantum/system';
 import { encodeShor, measureBitFlipSyndrome, measurePhaseFlipSyndrome, correctBitFlipErrors, correctPhaseFlipErrors } from '../src/core/codes/shor';
 
@@ -14,10 +5,8 @@ describe('Shor Code Optimization Tests', () => {
   test('System has correct number of physical qubits (10 = 9 data + 1 ancilla)', () => {
     const system = create9QubitShorSystem();
     
-    // Physical qubits: 9 data + 1 ancilla = 10
     expect(system.numQubits).toBe(10);
     
-    // State vector dimension: 2^10 = 1024
     expect(system.state.dimension).toBe(1024);
     
     console.log(`✓ State space: 2^${system.numQubits} = ${system.state.dimension} (optimized from 2^17 = 131072)`);
@@ -26,11 +15,10 @@ describe('Shor Code Optimization Tests', () => {
   test('Virtual-to-physical mapping is correct', () => {
     const system = create9QubitShorSystem();
     
-    // All virtual ancillas (9-16) should map to physical ancilla (9)
     expect(system.virtualQubitMap).toBeDefined();
     
     if (system.virtualQubitMap) {
-      // Check all 8 virtual ancillas
+      
       for (let i = 9; i <= 16; i++) {
         expect(system.virtualQubitMap.get(i)).toBe(9);
       }
@@ -47,18 +35,14 @@ describe('Shor Code Optimization Tests', () => {
     
     console.log('\n=== Testing syndrome measurement on perfect encoded state ===');
     
-    // Measure bit-flip syndrome
     const bitFlipSyndrome = measureBitFlipSyndrome(system);
     console.log('Bit-flip syndrome:', bitFlipSyndrome);
     
-    // Should be all zeros (no errors)
     expect(bitFlipSyndrome).toEqual([0, 0, 0, 0, 0, 0]);
     
-    // Measure phase-flip syndrome
     const phaseFlipSyndrome = measurePhaseFlipSyndrome(system);
     console.log('Phase-flip syndrome:', phaseFlipSyndrome);
     
-    // Should be all zeros (no errors)
     expect(phaseFlipSyndrome).toEqual([0, 0]);
     
     console.log('✓ Perfect encoded state has zero syndrome');
@@ -71,41 +55,33 @@ describe('Shor Code Optimization Tests', () => {
     
     console.log('\n=== Testing X error detection and correction ===');
     
-    // Save reference state
     const idealState = system.state.clone();
     
-    // Apply X error to q0
     system.applyGatesWithDescription([
       { name: 'X', qubits: [0], label: 'X_q0 (noise)' }
     ], 'Test: X error on q0', 'noise');
     console.log('Applied X error to q0');
     
-    // Measure syndrome
     const bitFlipSyndrome = measureBitFlipSyndrome(system);
     console.log('Bit-flip syndrome:', bitFlipSyndrome);
     
-    // Block 1 syndrome should be (1, 0) indicating error on first qubit
-    expect(bitFlipSyndrome[0]).toBe(1); // S0 = Z0 Z1
-    expect(bitFlipSyndrome[1]).toBe(0); // S1 = Z1 Z2
+    expect(bitFlipSyndrome[0]).toBe(1); 
+    expect(bitFlipSyndrome[1]).toBe(0); 
     
-    // Other blocks should be clean
     expect(bitFlipSyndrome[2]).toBe(0);
     expect(bitFlipSyndrome[3]).toBe(0);
     expect(bitFlipSyndrome[4]).toBe(0);
     expect(bitFlipSyndrome[5]).toBe(0);
     
-    // Phase syndrome should be clean
     const phaseFlipSyndrome = measurePhaseFlipSyndrome(system);
     expect(phaseFlipSyndrome).toEqual([0, 0]);
     
     console.log('✓ Syndrome correctly identifies X error on q0');
     
-    // Apply correction
     const corrected = correctBitFlipErrors(system, bitFlipSyndrome);
     console.log('Corrected qubits:', corrected);
     expect(corrected).toEqual([0]);
     
-    // Check fidelity with ideal state
     const fidelity = system.state.fidelity(idealState);
     console.log('Fidelity after correction:', fidelity.toFixed(6));
     expect(fidelity).toBeGreaterThan(0.99);
@@ -120,36 +96,29 @@ describe('Shor Code Optimization Tests', () => {
     
     console.log('\n=== Testing Z error detection and correction ===');
     
-    // Save reference state
     const idealState = system.state.clone();
     
-    // Apply Z error to q0
     system.applyGatesWithDescription([
       { name: 'Z', qubits: [0], label: 'Z_q0 (noise)' }
     ], 'Test: Z error on q0', 'noise');
     console.log('Applied Z error to q0');
     
-    // Measure bit-flip syndrome (should be clean - Z doesn't flip bits)
     const bitFlipSyndrome = measureBitFlipSyndrome(system);
     console.log('Bit-flip syndrome:', bitFlipSyndrome);
     expect(bitFlipSyndrome).toEqual([0, 0, 0, 0, 0, 0]);
     
-    // Measure phase-flip syndrome
     const phaseFlipSyndrome = measurePhaseFlipSyndrome(system);
     console.log('Phase-flip syndrome:', phaseFlipSyndrome);
     
-    // Should detect phase error in block 1: (1, 0)
-    expect(phaseFlipSyndrome[0]).toBe(1); // S6 = X0...X5
-    expect(phaseFlipSyndrome[1]).toBe(0); // S7 = X3...X8
+    expect(phaseFlipSyndrome[0]).toBe(1); 
+    expect(phaseFlipSyndrome[1]).toBe(0); 
     
     console.log('✓ Syndrome correctly identifies Z error in block 1');
     
-    // Apply correction
     const corrected = correctPhaseFlipErrors(system, phaseFlipSyndrome);
     console.log('Corrected qubits:', corrected);
     expect(corrected).toEqual([0]);
     
-    // Check fidelity with ideal state
     const fidelity = system.state.fidelity(idealState);
     console.log('Fidelity after correction:', fidelity.toFixed(6));
     expect(fidelity).toBeGreaterThan(0.99);
@@ -164,39 +133,31 @@ describe('Shor Code Optimization Tests', () => {
     
     console.log('\n=== Testing Y error detection and correction ===');
     
-    // Save reference state
     const idealState = system.state.clone();
     
-    // Apply Y error to q4 (in block 2)
     system.applyGatesWithDescription([
       { name: 'Y', qubits: [4], label: 'Y_q4 (noise)' }
     ], 'Test: Y error on q4', 'noise');
     console.log('Applied Y error to q4');
     
-    // Measure bit-flip syndrome
     const bitFlipSyndrome = measureBitFlipSyndrome(system);
     console.log('Bit-flip syndrome:', bitFlipSyndrome);
     
-    // Block 2 should show X component: (1, 1) for q4
-    expect(bitFlipSyndrome[2]).toBe(1); // S2 = Z3 Z4
-    expect(bitFlipSyndrome[3]).toBe(1); // S3 = Z4 Z5
+    expect(bitFlipSyndrome[2]).toBe(1); 
+    expect(bitFlipSyndrome[3]).toBe(1); 
     
-    // Measure phase-flip syndrome
     const phaseFlipSyndrome = measurePhaseFlipSyndrome(system);
     console.log('Phase-flip syndrome:', phaseFlipSyndrome);
     
-    // Should show Z component in block 2: (1, 1)
-    expect(phaseFlipSyndrome[0]).toBe(1); // S6 involves block 2
-    expect(phaseFlipSyndrome[1]).toBe(1); // S7 involves block 2
+    expect(phaseFlipSyndrome[0]).toBe(1); 
+    expect(phaseFlipSyndrome[1]).toBe(1); 
     
     console.log('✓ Syndrome correctly identifies Y error (X and Z components)');
     
-    // Apply corrections
     const bitCorrected = correctBitFlipErrors(system, bitFlipSyndrome);
     const phaseCorrected = correctPhaseFlipErrors(system, phaseFlipSyndrome);
     console.log('Corrected qubits - bit:', bitCorrected, ', phase:', phaseCorrected);
     
-    // Check fidelity with ideal state
     const fidelity = system.state.fidelity(idealState);
     console.log('Fidelity after correction:', fidelity.toFixed(6));
     expect(fidelity).toBeGreaterThan(0.99);
@@ -211,7 +172,6 @@ describe('Shor Code Optimization Tests', () => {
     
     console.log('\n=== Testing ancilla reset between measurements ===');
     
-    // Measure first syndrome (uses physical ancilla at index 9)
     system.applyGatesWithDescription([
       { name: 'CNOT', qubits: [0, 9], label: 'CNOT_{q0→a0}' },
       { name: 'CNOT', qubits: [1, 9], label: 'CNOT_{q1→a0}' }
@@ -220,11 +180,9 @@ describe('Shor Code Optimization Tests', () => {
     const result1 = system.measureQubit(9);
     console.log('First measurement result:', result1);
     
-    // Reset ancilla
     system.resetQubit(9);
     console.log('Reset ancilla to |0⟩');
     
-    // Verify ancilla is in |0⟩ by checking probability
     const prob0 = 1 - system.state.qubitProbability(9);
     console.log('P(|0⟩) for physical ancilla:', prob0.toFixed(6));
     expect(prob0).toBeGreaterThan(0.99);
@@ -260,4 +218,3 @@ describe('Shor Code Optimization Tests', () => {
 console.log('\n' + '='.repeat(60));
 console.log('Running Shor Code Optimization Tests...');
 console.log('='.repeat(60));
-

@@ -1,6 +1,3 @@
-/**
- * Syndrome Table Component
- */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Table, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
@@ -12,12 +9,12 @@ import type { NoiseType } from '../core/noise/noise';
 interface SyndromeTableProps {
   codeType: CodeType;
   currentSyndrome?: number[];
-  expectedSyndrome?: number[]; // Expected syndrome after user gates (before errors)
-  errorsApplied?: number; // Number of actual errors that were applied (noise)
-  noiseType?: NoiseType; // Type of noise applied
-  hasGateErrors?: boolean; // Whether gate errors occurred
-  gateErrorsCount?: number; // Number of gate errors
-  userGatesApplied?: boolean; // Whether user applied custom gates
+  expectedSyndrome?: number[]; 
+  errorsApplied?: number; 
+  noiseType?: NoiseType; 
+  hasGateErrors?: boolean; 
+  gateErrorsCount?: number; 
+  userGatesApplied?: boolean; 
 }
 
 export const SyndromeTable: React.FC<SyndromeTableProps> = ({
@@ -30,18 +27,15 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
   gateErrorsCount = 0,
   userGatesApplied = false
 }) => {
-  // Calculate actual error syndrome (measured XOR expected)
+  
   const errorSyndrome = currentSyndrome && expectedSyndrome
     ? currentSyndrome.map((s, i) => s ^ (expectedSyndrome[i] || 0))
     : currentSyndrome;
   
-  // Check if user gates changed the expected syndrome
   const hasExpectedSyndromeChange = expectedSyndrome.some(s => s !== 0);
   
-  // Use error syndrome for table matching when expected syndrome is non-zero
   const syndromeToMatch = hasExpectedSyndromeChange ? errorSyndrome : currentSyndrome;
   
-  // Calculate total errors
   const totalErrors = gateErrorsCount + errorsApplied;
   const tooManyErrors = totalErrors > 1 && codeType === 'repetition';
   
@@ -61,10 +55,8 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
     return tableEntry === formatSyndrome(syndrome);
   };
   
-  // Use syndromeToMatch for display
   const displaySyndrome = syndromeToMatch;
-
-  // Check for errors exceeding correction capability
+  
   const isLogicalError = codeType === 'repetition' 
     && displaySyndrome?.every(s => s === 0) 
     && errorsApplied >= 2;
@@ -73,8 +65,6 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
     && errorsApplied === 2
     && !displaySyndrome?.every(s => s === 0);
   
-  // Check if using wrong noise type for repetition code
-  // Show warning if Z or Y errors were applied (they remain undetectable even after X-correction)
   const isWrongNoiseType = codeType === 'repetition'
     && (noiseType === 'phase-flip' || noiseType === 'bit-phase-flip');
 
@@ -90,7 +80,7 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
           </h3>
         </div>
         
-        {/* Too many errors warning (gate errors + noise > 1) */}
+        {}
         {tooManyErrors && (
           <motion.div 
             initial={{ opacity: 0, height: 0 }}
@@ -111,7 +101,7 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
           </motion.div>
         )}
         
-        {/* Logical error warning (3 errors - undetectable) */}
+        {}
         {isLogicalError && (
           <motion.div 
             initial={{ opacity: 0, height: 0 }}
@@ -131,7 +121,7 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
           </motion.div>
         )}
         
-        {/* Wrong correction warning (2 errors - detected but incorrectly corrected) */}
+        {}
         {isWrongCorrection && (
           <motion.div 
             initial={{ opacity: 0, height: 0 }}
@@ -151,7 +141,7 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
           </motion.div>
         )}
         
-        {/* Wrong noise type warning (Z/Y errors not detectable by repetition code) */}
+        {}
         {isWrongNoiseType && (
           <motion.div 
             initial={{ opacity: 0, height: 0 }}
@@ -236,14 +226,13 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
       </div>
     );
   }
-
-  // Shor code tables
+  
   const bitSyndrome = currentSyndrome?.slice(0, 6);
   const phaseSyndrome = currentSyndrome?.slice(6, 8);
   
   return (
     <div className="space-y-4">
-      {/* Bit-flip syndrome table */}
+      {}
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-700 flex items-center gap-2">
           <Table className="w-4 h-4 text-cyan-400" />
@@ -265,7 +254,7 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
             <tbody>
               {[1, 2, 3].map((blockNum) => {
                 const blockEntries = shorBitFlipSyndromeTable.filter(e => e.block === blockNum);
-                const blockIdx = blockNum - 1; // Convert to 0-indexed for syndrome array
+                const blockIdx = blockNum - 1; 
                 const blockSyndrome = bitSyndrome?.slice(blockIdx * 2, blockIdx * 2 + 2);
                 const currentBlockStr = blockSyndrome ? formatSyndrome(blockSyndrome) : null;
                 
@@ -306,7 +295,7 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
         </div>
       </div>
 
-      {/* Phase-flip syndrome table */}
+      {}
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-700 flex items-center gap-2">
           <Table className="w-4 h-4 text-purple-400" />
@@ -362,4 +351,3 @@ export const SyndromeTable: React.FC<SyndromeTableProps> = ({
 };
 
 export default SyndromeTable;
-

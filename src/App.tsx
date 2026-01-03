@@ -1,7 +1,3 @@
-/**
- * QEC Simulator - Main Application
- * Interactive Quantum Error Correction Simulator
- */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -43,9 +39,9 @@ import { TransformationView } from './components/TransformationView';
 import './App.css';
 
 const App: React.FC = () => {
-  // Configuration state
+  
   const [codeType, setCodeType] = useState<CodeType>('repetition');
-  const initialState: LogicalState = 'zero'; // Всегда |0⟩
+  const initialState: LogicalState = 'zero'; 
   const [noiseType, setNoiseType] = useState<NoiseType>('bit-flip');
   const [errorCount, setErrorCount] = useState(1);
   const [gateErrorConfig, setGateErrorConfig] = useState<GateErrorConfig>(defaultGateErrorConfig);
@@ -54,13 +50,11 @@ const App: React.FC = () => {
   const [selectedGateForErrorConfig, setSelectedGateForErrorConfig] = useState<number | null>(null);
   const [activeConfigTab, setActiveConfigTab] = useState<'noise' | 'gate-error'>('noise');
   
-  // Simulator state
   const [simulator, setSimulator] = useState<QECSimulator | null>(null);
   const [phase, setPhase] = useState<SimulationPhase>('init');
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   
-  // UI state
   const [showBlochSpheres, setShowBlochSpheres] = useState(false);
   const [showQBERChart, setShowQBERChart] = useState(true);
   const [showTransformations, setShowTransformations] = useState(false);
@@ -70,30 +64,20 @@ const App: React.FC = () => {
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(true);
   
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Get number of qubits based on code type
-  // Physical qubits for calculations:
-  // repetition: 3 data + 2 ancilla = 5
-  // shor: 9 data + 1 ancilla (reused for all measurements) = 10
+  
   const physicalQubits = codeType === 'repetition' ? 5 : 10;
   
-  // Display qubits for visualization (show all 8 ancillas for Shor even though we use only 1):
-  // repetition: 5 (same as physical)
-  // shor: 9 data + 8 ancilla (virtual) = 17 for display
   const displayQubits = codeType === 'repetition' ? 5 : 17;
   
-  // For Bloch spheres and state display, use physical qubits
   const numQubits = physicalQubits;
   
-  // Create virtual qubit labels for display (for Shor code, show all 8 ancillas)
   const getDisplayQubitLabels = (system: any) => {
     const labels = system.qubits.map((q: any) => q.label);
     if (codeType === 'shor' && labels.length === 10) {
-      // Physical: q0-q8, a (10 qubits)
-      // Virtual display: q0-q8, a0-a7 (17 qubits)
+      
       return [
-        ...labels.slice(0, 9),  // q0-q8
-        'a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'  // 8 ancillas for display
+        ...labels.slice(0, 9),  
+        'a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'  
       ];
     }
     return labels;
@@ -102,17 +86,16 @@ const App: React.FC = () => {
   const getDisplayQubitRoles = (system: any) => {
     const roles = system.qubits.map((q: any) => q.role);
     if (codeType === 'shor' && roles.length === 10) {
-      // Show all 8 ancillas as regular ancilla role
+      
       return [
-        ...roles.slice(0, 9),  // data qubits (q0-q8)
-        'ancilla', 'ancilla', 'ancilla', 'ancilla',  // a0-a3
-        'ancilla', 'ancilla', 'ancilla', 'ancilla'   // a4-a7
+        ...roles.slice(0, 9),  
+        'ancilla', 'ancilla', 'ancilla', 'ancilla',  
+        'ancilla', 'ancilla', 'ancilla', 'ancilla'   
       ];
     }
     return roles;
   };
-
-  // Initialize simulator - only when code type or initial state changes
+  
   const initializeSimulator = useCallback(() => {
     const config: SimulatorConfig = {
       codeType,
@@ -122,10 +105,10 @@ const App: React.FC = () => {
         probability: 0,
         mode: 'exact-count',
         exactCount: errorCount,
-        // For repetition: apply noise only to data qubits (q0,q1,q2), not ancillas
+        
         targetQubits: codeType === 'repetition' ? [0, 1, 2] : undefined
       },
-      // Gate errors disabled for initialization - only apply to user gates
+      
       gateErrorConfig: {
         enabled: false,
         type: 'none',
@@ -144,17 +127,15 @@ const App: React.FC = () => {
     setPhase(sim.getPhase());
     setCurrentStep(sim.getHistory().length);
     setIsPlaying(false);
-  }, [codeType, initialState]); // Only reset on code/state change, not noise
-
-  // Initialize on mount and when code/state changes
+  }, [codeType, initialState]); 
+  
   useEffect(() => {
     initializeSimulator();
   }, [initializeSimulator]);
-
-  // Update noise config without resetting simulator
+  
   useEffect(() => {
     if (simulator) {
-      // Update noise config - will be used on next noise application
+      
       simulator.getState().config.noiseConfig = {
         type: noiseType,
         probability: 0,
@@ -165,20 +146,19 @@ const App: React.FC = () => {
       simulator.getState().system.setGateErrorConfig(gateErrorConfig);
     }
   }, [noiseType, errorCount, gateErrorConfig, simulator]);
-
-  // Auto-play effect - executes simulation steps
+  
   useEffect(() => {
     if (isPlaying && simulator) {
       playIntervalRef.current = setInterval(() => {
         const simPhase = simulator.getPhase();
         if (simPhase !== 'complete') {
-          // Execute next simulation step
+          
           simulator.stepForward();
           setPhase(simulator.getPhase());
-          // Update view to show latest step
+          
           setCurrentStep(simulator.getHistory().length);
         } else {
-          // Simulation complete, stop auto-play
+          
           setIsPlaying(false);
         }
       }, 600);
@@ -190,38 +170,32 @@ const App: React.FC = () => {
       }
     };
   }, [isPlaying, simulator]);
-
-  // Control handlers
-  // Calculate expected syndrome after user gates (for syndrome table interpretation)
+  
   const calculateExpectedSyndrome = useCallback(() => {
     if (customGatePlan.length === 0 || codeType !== 'repetition') {
-      // For Shor code, return 8-element array (6 bit-flip + 2 phase-flip syndromes)
+      
       return codeType === 'shor' ? [0, 0, 0, 0, 0, 0, 0, 0] : [0, 0];
     }
     
     let s0 = 0, s1 = 0;
     
-    // Apply syndrome changes from user gates (not from INIT/ENCODE)
     for (const step of customGatePlan) {
       const gateName = step.op.name;
       const qubit = step.op.qubits[0];
       
-      // X and Y change syndrome (bit-flip component)
       if (gateName === 'X' || gateName === 'Y') {
         if (qubit === 0) {
-          s0 ^= 1; // s_exp ⊕ (1,0)
+          s0 ^= 1; 
         } else if (qubit === 1) {
-          s0 ^= 1; // s_exp ⊕ (1,1)
+          s0 ^= 1; 
           s1 ^= 1;
         } else if (qubit === 2) {
-          s1 ^= 1; // s_exp ⊕ (0,1)
+          s1 ^= 1; 
         }
       }
-      // Rx(π), Ry(π) are equivalent to X (with phase difference)
+      
       else if (gateName === 'Rx' || gateName === 'Ry') {
-        // For repetition code (bit-flip), Rx(π) and Ry(π) act like X
-        // Small angle rotations don't change syndrome predictably (coherent error)
-        // We'll assume if user adds Rx/Ry, they mean π rotation
+        
         if (qubit === 0) {
           s0 ^= 1;
         } else if (qubit === 1) {
@@ -231,10 +205,9 @@ const App: React.FC = () => {
           s1 ^= 1;
         }
       }
-      // Z, S, T, Rz don't change bit-flip syndrome
-      // H, CNOT from user gates also change syndrome
+      
       else if (gateName === 'H') {
-        // H can change syndrome in complex ways, but for repetition code it's like bit-flip
+        
         if (qubit === 0) {
           s0 ^= 1;
         } else if (qubit === 1) {
@@ -253,7 +226,7 @@ const App: React.FC = () => {
   const expectedSyndrome = calculateExpectedSyndrome();
 
   const handlePlay = () => {
-    // Always create new simulation with current settings
+    
     const config: SimulatorConfig = {
       codeType,
       initialState,
@@ -263,7 +236,7 @@ const App: React.FC = () => {
         mode: 'exact-count',
         exactCount: errorCount
       },
-      // Gate errors disabled for initialization
+      
       gateErrorConfig: {
         enabled: false,
         type: 'none',
@@ -275,16 +248,14 @@ const App: React.FC = () => {
     const sim = new QECSimulator(config);
     sim.initialize();
     
-    // Check if there are custom gates to apply
     if (customGatePlan.length > 0) {
       console.log('[App] Play: Applying custom gates instead of noise', customGatePlan.length);
       customGatePlan.forEach((gate, i) => {
         console.log(`  [App] Custom gate ${i}:`, gate.op.name, 'qubits:', gate.op.qubits, 'errorProb:', gate.errorProbability);
       });
       
-      // Apply custom circuit (gates + optional noise + correction if gate errors occur)
       try {
-        sim.applyCustomCircuit(customGatePlan, true); // true = apply noise after gates
+        sim.applyCustomCircuit(customGatePlan, true); 
         console.log('[App] Custom circuit applied, final history length:', sim.getHistory().length);
         console.log('[App] Final phase:', sim.getPhase());
       } catch (error) {
@@ -294,10 +265,10 @@ const App: React.FC = () => {
       setSimulator(sim);
       setPhase(sim.getPhase());
       setCurrentStep(sim.getHistory().length);
-      setIsPlaying(false); // Don't auto-play for custom gates
+      setIsPlaying(false); 
     } else {
       console.log('[App] Play: Running standard simulation with noise');
-      // Standard simulation flow - run full cycle (encode → noise → measure → correct → decode)
+      
       try {
         sim.runFullCycle();
         console.log('[App] Full cycle completed, final history length:', sim.getHistory().length);
@@ -309,13 +280,12 @@ const App: React.FC = () => {
       setSimulator(sim);
       setPhase(sim.getPhase());
       setCurrentStep(sim.getHistory().length);
-      setIsPlaying(true); // Auto-play for standard simulation
+      setIsPlaying(true); 
     }
   };
 
   const handlePause = () => setIsPlaying(false);
-
-  // Navigation handlers - move through snapshots and update simulator state
+  
   const [, forceUpdate] = useState(0);
   
   const handleStepForward = () => {
@@ -326,7 +296,7 @@ const App: React.FC = () => {
         simulator.goToStep(currentSnapshotIndex + 1);
         setPhase(simulator.getPhase());
         setCurrentStep(simulator.getHistory().length);
-        forceUpdate(n => n + 1); // Force re-render for Bloch spheres
+        forceUpdate(n => n + 1); 
       }
     }
   };
@@ -338,7 +308,7 @@ const App: React.FC = () => {
         simulator.goToStep(currentSnapshotIndex - 1);
         setPhase(simulator.getPhase());
         setCurrentStep(simulator.getHistory().length);
-        forceUpdate(n => n + 1); // Force re-render for Bloch spheres
+        forceUpdate(n => n + 1); 
       }
     }
   };
@@ -379,7 +349,7 @@ const App: React.FC = () => {
         mode: 'exact-count',
         exactCount: errorCount
       },
-      // Gate errors disabled for initialization
+      
       gateErrorConfig: {
         enabled: false,
         type: 'none',
@@ -392,7 +362,6 @@ const App: React.FC = () => {
     
     console.log('[App] After initialize, history length:', sim.getHistory().length);
     
-    // No need to call encode() - it's already done in initialize()
     sim.applyCustomCircuit(customGatePlan);
     
     console.log('[App] After applyCustomCircuit, history length:', sim.getHistory().length);
@@ -412,7 +381,7 @@ const App: React.FC = () => {
     
     if (isTwoQubit) {
       if (pendingTwoQubitGate && pendingTwoQubitGate.gateName === gateName) {
-        // Second qubit selected - add gate
+        
         const op: GateOperation = {
           name: gateName as GateOperation['name'],
           qubits: [pendingTwoQubitGate.firstQubit, qubitIndex]
@@ -427,12 +396,12 @@ const App: React.FC = () => {
         handleAddCustomGate(newStep);
         setPendingTwoQubitGate(null);
       } else {
-        // First qubit selected - wait for second
+        
         console.log('Waiting for second qubit for:', gateName);
         setPendingTwoQubitGate({ gateName, firstQubit: qubitIndex });
       }
     } else {
-      // Single-qubit gate - add immediately
+      
       const op: GateOperation = {
         name: gateName as GateOperation['name'],
         qubits: [qubitIndex]
@@ -473,13 +442,12 @@ const App: React.FC = () => {
       setCurrentStep(simulator.getHistory().length);
     }
   };
-
-  // Get current snapshot index for reactivity
+  
   const snapshotIndex = simulator?.getCurrentSnapshotIndex() ?? 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      {/* Header */}
+      {}
       <header className={`border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50 transition-all duration-300 ${isHeaderCollapsed ? 'border-b-0' : ''}`}>
         {isHeaderCollapsed ? (
           <div className="flex justify-end px-2 py-1">
@@ -539,7 +507,7 @@ const App: React.FC = () => {
 
       <main className="max-w-[1600px] mx-auto px-4 py-4">
         <div className="grid grid-cols-12 gap-4">
-          {/* Left Panel - Controls */}
+          {}
           <div className="col-span-12 lg:col-span-3 space-y-6">
             <ControlPanel
               codeType={codeType}
@@ -575,9 +543,9 @@ const App: React.FC = () => {
             />
           </div>
 
-          {/* Center Panel - Main Visualization */}
+          {}
           <div className="col-span-12 lg:col-span-6 space-y-6">
-            {/* Quantum Circuit */}
+            {}
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
                 <Layers className="w-5 h-5 text-cyan-400" />
@@ -585,7 +553,7 @@ const App: React.FC = () => {
               </h2>
               
               <div className="flex gap-4">
-                {/* Circuit */}
+                {}
                 <div className="flex-1 min-w-0">
                   {simulator && (
                     <QuantumCircuit
@@ -605,14 +573,14 @@ const App: React.FC = () => {
                   )}
                 </div>
                 
-                {/* Legend (Right Side) */}
+                {}
                 <div className="flex-shrink-0">
                   <CircuitLegend />
                 </div>
               </div>
             </div>
 
-            {/* Transformation History Section */}
+            {}
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
               {simulator && (
                 <TransformationView
@@ -623,7 +591,7 @@ const App: React.FC = () => {
               )}
             </div>
 
-            {/* State Display */}
+            {}
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
               <button
                 onClick={() => setShowStateDisplay(!showStateDisplay)}
@@ -655,7 +623,7 @@ const App: React.FC = () => {
               </AnimatePresence>
             </div>
 
-            {/* Bloch Spheres Section */}
+            {}
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden">
               <button
                 onClick={() => setShowBlochSpheres(!showBlochSpheres)}
@@ -676,7 +644,7 @@ const App: React.FC = () => {
                     exit={{ height: 0, opacity: 0 }}
                     className="px-6 pb-6"
                   >
-                    {/* Current step indicator */}
+                    {}
                     <div className="mb-4 p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
                       <div className="flex items-center justify-between">
                         <div className="text-sm text-cyan-300">
@@ -687,7 +655,7 @@ const App: React.FC = () => {
                         </div>
                       </div>
                       
-                      {/* Correction info */}
+                      {}
                       {phase === 'correction' && simulator.getState().correctedQubits.length > 0 && (
                         <div className="mt-2 p-2 bg-green-500/20 border border-green-500/40 rounded text-sm text-green-300">
                           ✅ Коррекция применена на: <span className="font-mono font-bold">
@@ -704,7 +672,7 @@ const App: React.FC = () => {
                       )}
                     </div>
                     
-                    {/* Single Bloch sphere for selected qubit */}
+                    {}
                     <div className="mb-4">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-sm text-slate-400">Выбранный кубит:</span>
@@ -751,7 +719,7 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Grid of all Bloch spheres (compact) */}
+                    {}
                     {numQubits <= 3 && (
                       <BlochSphereGrid
                         coordinates={simulator.getBlochCoordinates()}
@@ -765,9 +733,9 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Panel - Info & Logs */}
+          {}
           <div className="col-span-12 lg:col-span-3 space-y-6">
-            {/* Event Log */}
+            {}
             {simulator && (
               <EventLog
                 steps={simulator.getHistory()}
@@ -776,7 +744,7 @@ const App: React.FC = () => {
               />
             )}
 
-            {/* Syndrome Table */}
+            {}
             <SyndromeTable
               codeType={codeType}
               currentSyndrome={simulator?.getState().syndrome}
@@ -788,7 +756,7 @@ const App: React.FC = () => {
               userGatesApplied={customGatePlan.length > 0 && simulator?.getPhase() === 'complete'}
             />
             
-            {/* View Correction Details Button */}
+            {}
             {simulator && phase === 'complete' && (
               <button
                 onClick={() => setShowCorrectionDetails(true)}
@@ -801,7 +769,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* QBER Chart Section */}
+        {}
         <div className="mt-6">
           <button
             onClick={() => setShowQBERChart(!showQBERChart)}
@@ -829,7 +797,7 @@ const App: React.FC = () => {
           </AnimatePresence>
         </div>
 
-        {/* Info Section */}
+        {}
         <section id="info" className="mt-12 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-8">
           <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
             <Info className="w-6 h-6 text-cyan-400" />
@@ -873,7 +841,7 @@ const App: React.FC = () => {
         </section>
       </main>
 
-      {/* Modal for gate error configuration */}
+      {}
       <AnimatePresence>
         {selectedGateForErrorConfig !== null && customGatePlan[selectedGateForErrorConfig] && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedGateForErrorConfig(null)}>
@@ -972,7 +940,7 @@ const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Footer */}
+      {}
       <footer className="border-t border-slate-800 mt-12 py-6">
         <div className="max-w-7xl mx-auto px-4 text-center text-slate-500 text-sm">
           <p>QEC Simulator — Интерактивная симуляция квантовой коррекции ошибок</p>

@@ -1,16 +1,9 @@
-/**
- * Простой тест для проверки Gate Errors
- */
-
 import { QECSimulator } from '../src/core/simulator';
 import type { SimulatorConfig } from '../src/core/simulator';
 
 console.log('\n🧪 ПРОСТОЙ ТЕСТ GATE ERRORS');
 console.log('═'.repeat(70));
 
-// ============================================
-// ТЕСТ 1: Gate Errors с высокой вероятностью (50%)
-// ============================================
 console.log('\n📝 ТЕСТ 1: Gate Errors с вероятностью 50%');
 console.log('─'.repeat(70));
 
@@ -26,7 +19,7 @@ const config1: SimulatorConfig = {
   gateErrorConfig: {
     enabled: true,
     type: 'bit-flip',
-    probability: 0.5, // 50% вероятность
+    probability: 0.5, 
     applyTo: 'all'
   }
 };
@@ -44,15 +37,12 @@ const result1 = sim1.runFullCycle();
 console.log('\n📊 Результаты:');
 console.log(`  Всего операций: ${result1.steps.length}`);
 
-// Подсчёт gate errors
 const gateErrors1 = result1.steps.filter(step => step.type === 'gate-error');
 console.log(`  Gate errors обнаружено: ${gateErrors1.length}`);
 
-// Подсчёт обычных гейтов
 const normalGates1 = result1.steps.filter(step => step.type === 'gate');
 console.log(`  Обычных гейтов: ${normalGates1.length}`);
 
-// Показать детали gate errors
 if (gateErrors1.length > 0) {
   console.log('\n  Детали gate errors:');
   gateErrors1.forEach((step, idx) => {
@@ -68,9 +58,6 @@ console.log('  - Должно быть несколько gate errors (прим�
 console.log('  - Тип ошибки: X');
 console.log('  - Gate errors применяются после CNOT гейтов');
 
-// ============================================
-// ТЕСТ 2: Код Шора с gate errors
-// ============================================
 console.log('\n\n📝 ТЕСТ 2: Код Шора с gate errors (вероятность 30%)');
 console.log('─'.repeat(70));
 
@@ -86,7 +73,7 @@ const config2: SimulatorConfig = {
   gateErrorConfig: {
     enabled: true,
     type: 'depolarizing',
-    probability: 0.3, // 30% вероятность
+    probability: 0.3, 
     applyTo: 'all'
   }
 };
@@ -117,7 +104,6 @@ if (gateErrors2.length > 0) {
     console.log(`    ${idx + 1}. ${details.errorType} на q${details.qubitIndex} после гейта ${details.gateName}`);
   });
   
-  // Статистика типов ошибок
   const errorTypes = gateErrors2.map(s => s.gateErrorDetails!.errorType);
   const typeCount = errorTypes.reduce((acc, type) => {
     acc[type] = (acc[type] || 0) + 1;
@@ -137,9 +123,6 @@ console.log('  - Должно быть несколько gate errors (прим�
 console.log('  - Типы ошибок: X, Y, Z (случайные)');
 console.log('  - Gate errors применяются после H и CNOT гейтов');
 
-// ============================================
-// ТЕСТ 3: Статистика за 10 прогонов
-// ============================================
 console.log('\n\n📝 ТЕСТ 3: Статистика за 10 прогонов (p=20%)');
 console.log('─'.repeat(70));
 
@@ -155,7 +138,7 @@ const config3: SimulatorConfig = {
   gateErrorConfig: {
     enabled: true,
     type: 'bit-flip',
-    probability: 0.2, // 20%
+    probability: 0.2, 
     applyTo: 'all'
   }
 };
@@ -195,9 +178,6 @@ if (avgErrorRate >= 15 && avgErrorRate <= 25) {
   console.log('\n❌ GATE ERRORS НЕ РАБОТАЮТ: частота = 0%');
 }
 
-// ============================================
-// ИТОГОВЫЙ ОТЧЁТ
-// ============================================
 console.log('\n\n═'.repeat(70));
 console.log('📋 ИТОГОВЫЙ ОТЧЁТ');
 console.log('═'.repeat(70));
@@ -225,8 +205,3 @@ if (allPassed) {
 }
 console.log('═'.repeat(70));
 console.log('\n');
-
-
-
-
-

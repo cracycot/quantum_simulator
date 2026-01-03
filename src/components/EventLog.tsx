@@ -1,6 +1,3 @@
-/**
- * Event Log Component with LaTeX support
- */
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -57,9 +54,6 @@ const stepLabels: Record<QuantumStep['type'], string> = {
   correction: 'КОРРЕКЦИЯ'
 };
 
-/**
- * Safe LaTeX renderer with fallback
- */
 const SafeLatex: React.FC<{ formula: string; block?: boolean }> = ({ formula, block = false }) => {
   try {
     if (block) {
@@ -71,9 +65,6 @@ const SafeLatex: React.FC<{ formula: string; block?: boolean }> = ({ formula, bl
   }
 };
 
-/**
- * Detailed Gate Error Panel
- */
 const GateErrorDetailsPanel: React.FC<{
   details: GateErrorDetails;
   onClose: () => void;
@@ -107,7 +98,7 @@ const GateErrorDetailsPanel: React.FC<{
         </div>
 
         <div className="space-y-4">
-          {/* Basic info */}
+          {}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-slate-900/50 rounded-lg p-3">
               <div className="text-xs text-slate-500 mb-1">Гейт</div>
@@ -127,7 +118,7 @@ const GateErrorDetailsPanel: React.FC<{
             </div>
           </div>
 
-          {/* Math formulas */}
+          {}
           <div className="bg-slate-900/50 rounded-lg p-4 space-y-3">
             <div className="text-xs text-slate-400 font-medium">Математическое описание</div>
             
@@ -151,7 +142,7 @@ const GateErrorDetailsPanel: React.FC<{
             </div>
           </div>
 
-          {/* Explanation */}
+          {}
           <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
             <div className="flex items-start gap-2">
               <Info className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
@@ -256,7 +247,7 @@ const EventLogItem: React.FC<{
         </div>
       </div>
       
-      {/* Expandable details */}
+      {}
       <AnimatePresence>
         {isExpanded && hasDetails && (
           <motion.div
@@ -265,7 +256,7 @@ const EventLogItem: React.FC<{
             exit={{ height: 0, opacity: 0 }}
             className="mt-2 ml-6 text-xs space-y-2 overflow-hidden"
           >
-            {/* LaTeX formula */}
+            {}
             {step.latex && (
               <div className="p-2 bg-slate-900/70 rounded border border-slate-700 overflow-x-auto">
                 <div className="text-slate-500 text-xs mb-1">Формула:</div>
@@ -275,7 +266,7 @@ const EventLogItem: React.FC<{
               </div>
             )}
             
-            {/* Gate error details */}
+            {}
             {isGateError && step.gateErrorDetails && (
               <div className="p-2 bg-slate-900/50 rounded border border-orange-500/20">
                 <div className="flex items-center gap-1 text-orange-300 mb-2">
@@ -302,7 +293,7 @@ const EventLogItem: React.FC<{
               </div>
             )}
             
-            {/* General operation info */}
+            {}
             {step.operation && !isGateError && (
               <div className="p-2 bg-slate-900/50 rounded">
                 <div className="text-slate-400">
@@ -329,11 +320,9 @@ export const EventLog: React.FC<EventLogProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentItemRef = useRef<HTMLDivElement>(null);
   const [selectedErrorStep, setSelectedErrorStep] = useState<QuantumStep | null>(null);
-
-  // Determine which steps to show (all steps, but dim future ones)
+  
   const currentStepIndex = currentStep !== undefined ? currentStep - 1 : steps.length - 1;
   
-  // Count gate errors for summary
   const gateErrorCount = steps.filter(s => s.type === 'gate-error').length;
 
   const handleViewDetails = (step: QuantumStep) => {
@@ -397,7 +386,7 @@ export const EventLog: React.FC<EventLogProps> = ({
       </div>
     </div>
 
-      {/* Detailed error view modal */}
+      {}
       <AnimatePresence>
         {selectedErrorStep?.gateErrorDetails && (
           <GateErrorDetailsPanel

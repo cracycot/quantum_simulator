@@ -1,6 +1,3 @@
-/**
- * Quantum Circuit Diagram Visualization
- */
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { GateOperation } from '../core/quantum/gates';
@@ -12,24 +9,24 @@ interface CircuitGate {
   column: number;
   type: 'gate' | 'measurement' | 'noise' | 'encode' | 'decode' | 'correction' | 'gate-error';
   label?: string;
-  stepIndex?: number; // Index of the step in history
-  measurementResult?: number; // Result of measurement (0 or 1)
+  stepIndex?: number; 
+  measurementResult?: number; 
 }
 
 interface QuantumCircuitProps {
-  numQubits: number; // Number of qubits to display (may include virtual ancillas)
-  physicalQubits?: number; // Actual number of physical qubits in the system
+  numQubits: number; 
+  physicalQubits?: number; 
   steps: QuantumStep[];
   currentStep?: number;
   qubitLabels?: string[];
-  qubitRoles?: Array<'data' | 'ancilla' | 'syndrome'>; // Roles of qubits (data, ancilla, syndrome)
-  virtualQubitMap?: Map<number, number>; // Maps virtual qubit indices to physical ones (for ancilla reuse optimization)
+  qubitRoles?: Array<'data' | 'ancilla' | 'syndrome'>; 
+  virtualQubitMap?: Map<number, number>; 
   onGateClick?: (step: number) => void;
-  // Drag and drop support
+  
   isDroppable?: boolean;
   onGateDrop?: (gateName: string, qubitIndex: number, isTwoQubit: boolean) => void;
   pendingTwoQubitGate?: { gateName: string; firstQubit: number } | null;
-  // Custom gate plan for clickable gates
+  
   customGatePlan?: Array<{ op: GateOperation; errorProbability: number; errorType: string; applyTo?: string }>;
   onCustomGateClick?: (index: number) => void;
 }
@@ -48,7 +45,7 @@ const GATE_COLORS: Record<string, string> = {
   Rz: '#0ea5e9',
   SWAP: '#14b8a6',
   noise: '#dc2626',
-  'gate-error': '#f97316', // Orange for gate errors
+  'gate-error': '#f97316', 
   correction: '#10b981',
   measurement: '#6366f1'
 };
@@ -61,21 +58,16 @@ const getGateColor = (name: string, type: string): string => {
   return GATE_COLORS[name] || '#64748b';
 };
 
-/**
- * Parse steps into circuit gates for visualization
- * Each step from history becomes one column in the circuit
- */
 function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepToColumnMap: Map<number, number> } {
   const gates: CircuitGate[] = [];
-  const stepToColumnMap = new Map<number, number>(); // Маппинг step index -> column index
-  let column = 1; // Начинаем с колонки 1, колонка 0 зарезервирована для INIT
+  const stepToColumnMap = new Map<number, number>(); 
+  let column = 1; 
   
   steps.forEach((step, stepIdx) => {
     const desc = step.description.toLowerCase();
     
     if (step.operation) {
-      // Skip auto-applied gate steps like "Apply X₁ (correction)..." used for correction gates
-      // BUT keep noise gates "Apply X0 (noise)..." as they should be visualized
+      
       const isAutoAppliedGate =
         step.type === 'gate' &&
         (desc.includes('(correction)') ||
@@ -83,18 +75,15 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
       if (isAutoAppliedGate) {
         return;
       }
-
-      // Skip gate-error steps - they will be shown as indicators on user gates
+      
       if (step.type === 'gate-error') {
         return;
       }
-
-      // Skip user gates - they are already rendered via customGatePlan
+      
       if (step.type === 'gate' && desc.includes('user gate:')) {
         return;
       }
-
-      // Step has explicit gate operation
+      
       gates.push({
         name: step.operation.label || step.operation.name,
         qubits: step.operation.qubits,
@@ -103,11 +92,11 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
         label: step.description
       });
       stepToColumnMap.set(stepIdx, column);
-      column++; // Увеличиваем колонку только если добавили гейт
+      column++; 
     } else if (step.type === 'measurement') {
-      // Measurement step
+      
       let qubits = step.qubitIndex !== undefined ? [step.qubitIndex] : [0];
-      // Try to extract syndrome info
+      
       const syndromeMatch = desc.match(/\((\d+),\s*(\d+)\)/);
       gates.push({
         name: syndromeMatch ? `S:${syndromeMatch[1]}${syndromeMatch[2]}` : 'M',
@@ -119,32 +108,26 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
         measurementResult: step.measurementResult
       });
       stepToColumnMap.set(stepIdx, column);
-      column++; // Увеличиваем колонку только если добавили гейт
+      column++; 
     } else {
-      // Skip encode/decode steps without operations - they're shown as phase labels above
-      // Only show noise, correction, and other non-gate steps that have visual meaning
+      
       if (step.type === 'encode' || step.type === 'decode') {
-        // Skip these - they're represented by phase labels, не увеличиваем column
+        
         return;
       }
-
-      // Correction steps without an explicit operation are just explanations,
-      // the actual correction is shown as an operation step (type 'correction' with operation).
+      
       if (step.type === 'correction') {
         return;
       }
       
-      // Other steps (noise, correction, etc.) that should be shown
       let name = step.type.substring(0, 3).toUpperCase();
       let qubits: number[] = [0];
       
-      // Try to extract qubit info from description
       const qubitMatch = desc.match(/q[_]?(\d+)/i) || desc.match(/qubit\s*(\d+)/i);
       if (qubitMatch) {
         qubits = [parseInt(qubitMatch[1])];
       }
       
-      // Determine display name from description
       if (desc.includes('x error') || desc.includes('bit-flip')) {
         name = 'X!';
       } else if (desc.includes('z error') || desc.includes('phase-flip')) {
@@ -152,7 +135,7 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
       } else if (desc.includes('y error') || desc.includes('bit-phase')) {
         name = 'Y!';
       } else if (desc.includes('depolarizing')) {
-        // Extract the actual error type from depolarizing
+        
         if (desc.includes(' x ')) name = 'X!';
         else if (desc.includes(' y ')) name = 'Y!';
         else if (desc.includes(' z ')) name = 'Z!';
@@ -162,7 +145,7 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
       } else if (desc.includes('no error')) {
         name = '—';
       } else if (desc.includes('gate error')) {
-        // Gate error without operation info
+        
         if (desc.includes(' x ')) name = 'X⚡';
         else if (desc.includes(' y ')) name = 'Y⚡';
         else if (desc.includes(' z ')) name = 'Z⚡';
@@ -177,16 +160,13 @@ function parseStepsToGates(steps: QuantumStep[]): { gates: CircuitGate[]; stepTo
         label: step.description
       });
       stepToColumnMap.set(stepIdx, column);
-      column++; // Увеличиваем колонку только если добавили гейт
+      column++; 
     }
   });
   
   return { gates, stepToColumnMap };
 }
 
-/**
- * Single-qubit gate box
- */
 const GateBox: React.FC<{
   gate: CircuitGate;
   x: number;
@@ -220,7 +200,7 @@ const GateBox: React.FC<{
           filter: isActive ? `drop-shadow(0 0 8px ${color})` : 'none'
         }}
       />
-      {/* Lightning bolt indicator for gate errors */}
+      {}
       {isGateError && (
         <text
           x={x + 14}
@@ -247,9 +227,6 @@ const GateBox: React.FC<{
   );
 };
 
-/**
- * CNOT gate visualization
- */
 const CNOTGate: React.FC<{
   controlY: number;
   targetY: number;
@@ -266,7 +243,7 @@ const CNOTGate: React.FC<{
       onClick={onClick}
       style={{ cursor: onClick ? 'pointer' : 'default' }}
     >
-      {/* Vertical line connecting control and target */}
+      {}
       <line
         x1={x}
         y1={controlY}
@@ -275,14 +252,14 @@ const CNOTGate: React.FC<{
         stroke={isActive ? color : `${color}88`}
         strokeWidth={2}
       />
-      {/* Control dot */}
+      {}
       <circle
         cx={x}
         cy={controlY}
         r={6}
         fill={isActive ? color : `${color}88`}
       />
-      {/* Target circle with plus */}
+      {}
       <circle
         cx={x}
         cy={targetY}
@@ -311,9 +288,6 @@ const CNOTGate: React.FC<{
   );
 };
 
-/**
- * Measurement gate visualization
- */
 const MeasurementGate: React.FC<{
   x: number;
   y: number;
@@ -337,14 +311,14 @@ const MeasurementGate: React.FC<{
         stroke={color}
         strokeWidth={isActive ? 2 : 1}
       />
-      {/* Meter arc */}
+      {}
       <path
         d={`M ${x - 8} ${y + 5} A 10 10 0 0 1 ${x + 8} ${y + 5}`}
         fill="none"
         stroke="white"
         strokeWidth={1.5}
       />
-      {/* Meter needle */}
+      {}
       <line
         x1={x}
         y1={y + 5}
@@ -387,8 +361,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
 }) => {
   const [draggedOverQubit, setDraggedOverQubit] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-
-  // Track global drag state
+  
   React.useEffect(() => {
     if (!isDroppable) return;
 
@@ -411,7 +384,6 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
   }, [isDroppable]);
   const { gates, stepToColumnMap } = parseStepsToGates(steps);
   
-  // Find the last INIT/ENCODE gate column to insert custom gates after it
   const lastInitColumn = gates
     .filter(g => g.type === 'gate' || g.type === 'encode')
     .reduce((max, g) => Math.max(max, g.column), -1);
@@ -419,7 +391,6 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
   const customGateStartColumn = lastInitColumn + 1;
   const customGateColumns = customGatePlan.length;
   
-  // Shift all gates after INIT to make room for custom gates
   const shiftedGates = gates.map(g => {
     if (g.column > lastInitColumn) {
       return { ...g, column: g.column + customGateColumns };
@@ -431,13 +402,13 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
     shiftedGates.length > 0 ? Math.max(...shiftedGates.map(g => g.column)) + 1 : 1, 
     customGateStartColumn + customGateColumns
   );
-  const extraSpace = isDroppable ? 3 : 0; // Extra space when in drop mode
+  const extraSpace = isDroppable ? 3 : 0; 
   const totalColumns = baseNumColumns + extraSpace;
   
-  const wireSpacing = numQubits > 9 ? 35 : 50; // Уменьшенное расстояние для большего количества кубитов
-  const columnWidth = 80; // Увеличено расстояние между колонками (клеточками) для лучшей читаемости
-  const phaseLabelsHeight = numQubits > 9 ? 70 : 50; // Увеличено для 9+ кубитов, чтобы избежать наложения
-  const padding = { left: 100, right: 40, top: 30, bottom: 30 }; // Увеличен left для отступа гейтов
+  const wireSpacing = numQubits > 9 ? 35 : 50; 
+  const columnWidth = 80; 
+  const phaseLabelsHeight = numQubits > 9 ? 70 : 50; 
+  const padding = { left: 100, right: 40, top: 30, bottom: 30 }; 
   
   const width = Math.max(padding.left + totalColumns * columnWidth + padding.right, 400);
   const height = phaseLabelsHeight + padding.top + (numQubits - 1) * wireSpacing + padding.bottom;
@@ -445,12 +416,10 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
   const getQubitY = (qubit: number) => padding.top + qubit * wireSpacing;
   const getColumnX = (column: number) => padding.left + column * columnWidth + columnWidth / 2;
   
-  // Current step is 1-indexed (1 = first step done), convert to column using mapping
   const currentColumnIndex = currentStep !== undefined && currentStep > 0 
     ? (stepToColumnMap.get(currentStep - 1) ?? -1)
     : -1;
   
-  // Update stepToColumnMap to account for shifted gates
   const shiftedStepToColumnMap = new Map<number, number>();
   stepToColumnMap.forEach((column, stepIdx) => {
     if (column > lastInitColumn) {
@@ -460,7 +429,6 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
     }
   });
   
-  // Generate phase labels with custom gate info
   const phaseLabels = generatePhaseLabels(
     steps, 
     columnWidth, 
@@ -502,10 +470,10 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
         viewBox={`0 0 ${width} ${height}`}
         style={{ display: 'block' }}
       >
-        {/* Phase labels at the top */}
+        {}
         <g transform={`translate(0, 0)`}>
           {phaseLabels.map((phase, idx) => {
-            const labelHeight = numQubits > 9 ? 58 : 38; // Больше высоты для 9+ кубитов
+            const labelHeight = numQubits > 9 ? 58 : 38; 
             const textStartY = numQubits > 9 ? 20 : 18;
             return (
               <g key={`phase-${phase.name}-${idx}`}>
@@ -539,13 +507,13 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
           })}
         </g>
         
-        {/* Main circuit content - shifted down by phaseLabelsHeight */}
+        {}
         <g transform={`translate(0, ${phaseLabelsHeight})`}>
-        {/* Qubit wires and labels */}
+        {}
         {Array.from({ length: numQubits }, (_, i) => {
           return (
           <g key={`wire-${i}`}>
-            {/* Visual indicator for drag-over */}
+            {}
             {isDroppable && isDragging && draggedOverQubit === i && (
               <rect
                 x={padding.left - 30}
@@ -558,7 +526,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                 strokeDasharray="4,4"
               />
             )}
-            {/* Wire */}
+            {}
             <line
               x1={padding.left - 30}
               y1={getQubitY(i)}
@@ -567,7 +535,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
               stroke={draggedOverQubit === i ? '#06b6d4' : '#475569'}
               strokeWidth={draggedOverQubit === i ? 3 : 2}
             />
-            {/* Label */}
+            {}
             <text
               x={padding.left - 40}
               y={getQubitY(i) + 5}
@@ -579,10 +547,10 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
               |{qubitLabels?.[i] ?? `q${i}`}⟩
             </text>
             
-            {/* Virtual ancilla indicator (for Shor code optimization) */}
+            {}
             {virtualQubitMap && virtualQubitMap.has(i) && (
               <g>
-                {/* Dotted line overlay to indicate virtual ancilla */}
+                {}
                 <line
                   x1={padding.left - 30}
                   y1={getQubitY(i)}
@@ -593,7 +561,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                   strokeDasharray="2,4"
                   opacity={0.6}
                 />
-                {/* Info icon */}
+                {}
                 <g>
                   <circle
                     cx={padding.left - 10}
@@ -613,7 +581,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                   >
                     v
                   </text>
-                  {/* Tooltip on hover */}
+                  {}
                   <title>
                     Virtual ancilla: maps to physical ancilla at index {virtualQubitMap.get(i)}
                     {'\n'}(Sequential measurement with reset)
@@ -622,7 +590,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
               </g>
             )}
             
-            {/* Pending two-qubit gate indicator */}
+            {}
             {isDroppable && pendingTwoQubitGate && (
               <>
                 {pendingTwoQubitGate.firstQubit === i && (
@@ -641,9 +609,9 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
           );
         })}
         
-        {/* Column separators removed - using PhaseLabels instead */}
+        {}
         
-        {/* Custom gates from plan - inserted right after INIT gates */}
+        {}
         {customGatePlan.map((customGate, idx) => {
           const customColumn = customGateStartColumn + idx;
           const x = getColumnX(customColumn);
@@ -655,31 +623,25 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             label: customGate.op.name
           };
           
-          // Check if there's a gate-error in the history for this custom gate
-          // We need to find user gates (type='gate') that match this custom gate
-          // and check if the next steps contain gate-errors
           let hasGateError = false;
           let errorDetails: any = undefined;
           
-          // Count how many user gates we've seen before this one
           const userGatesBefore = idx;
           
-          // Find all user gates in steps (after encoding)
           const userGateSteps = steps.filter(step => step.type === 'gate');
           
           if (userGatesBefore < userGateSteps.length) {
             const thisGateStep = userGateSteps[userGatesBefore];
             const thisGateStepIndex = steps.indexOf(thisGateStep);
             
-            // Check subsequent steps for gate-errors related to this gate
             for (let i = thisGateStepIndex + 1; i < Math.min(thisGateStepIndex + 5, steps.length); i++) {
               if (steps[i].type === 'gate-error' && steps[i].gateErrorDetails) {
-                // Found a gate error after this gate
+                
                 hasGateError = true;
                 errorDetails = steps[i].gateErrorDetails;
                 break;
               }
-              // Stop if we encounter another user gate
+              
               if (steps[i].type === 'gate') break;
             }
           }
@@ -689,7 +651,6 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             onCustomGateClick?.(idx);
           };
           
-          // Handle two-qubit gates
           if ((gate.name === 'CNOT' || gate.name === 'CZ' || gate.name === 'SWAP') && gate.qubits.length === 2) {
             return (
               <g key={`custom-${idx}`} style={{ cursor: 'pointer' }} onClick={handleClick}>
@@ -699,7 +660,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                   x={x}
                   isActive={true}
                 />
-                {/* Clickable overlay */}
+                {}
                 <rect
                   x={x - 20}
                   y={Math.min(getQubitY(gate.qubits[0]), getQubitY(gate.qubits[1])) - 20}
@@ -708,17 +669,17 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                   fill="transparent"
                   style={{ cursor: 'pointer' }}
                 />
-                {/* Error occurred indicator - red warning triangle */}
+                {}
                 {hasGateError && errorDetails && (
                   <g>
-                    {/* Red warning triangle */}
+                    {}
                     <path
                       d={`M ${x + 18} ${getQubitY(Math.min(...gate.qubits)) - 25} l -6 -10 l 12 0 z`}
                       fill="#ef4444"
                       stroke="#fff"
                       strokeWidth={1}
                     />
-                    {/* Exclamation mark */}
+                    {}
                     <text
                       x={x + 18}
                       y={getQubitY(Math.min(...gate.qubits)) - 28}
@@ -730,7 +691,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                     >
                       !
                     </text>
-                    {/* Error type label */}
+                    {}
                     <text
                       x={x + 18}
                       y={getQubitY(Math.min(...gate.qubits)) - 14}
@@ -744,7 +705,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                     </text>
                   </g>
                 )}
-                {/* Error probability indicator (only if no error occurred yet) */}
+                {}
                 {!hasGateError && customGate.errorProbability > 0 && (
                   <text
                     x={x}
@@ -762,9 +723,8 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             );
           }
           
-          // Single-qubit gates
           return gate.qubits.map((qubit, qIdx) => {
-            // Check if error occurred on this specific qubit
+            
             const errorOnThisQubit = hasGateError && errorDetails?.qubitIndex === qubit;
             
             return (
@@ -775,7 +735,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                 y={getQubitY(qubit)}
                 isActive={true}
               />
-              {/* Clickable overlay for better hit detection */}
+              {}
               <rect
                 x={x - 22}
                 y={getQubitY(qubit) - 19}
@@ -784,17 +744,17 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                 fill="transparent"
                 style={{ cursor: 'pointer' }}
               />
-                {/* Error occurred indicator - red warning triangle with error type */}
+                {}
                 {errorOnThisQubit && errorDetails && (
                   <g>
-                    {/* Red warning triangle */}
+                    {}
                     <path
                       d={`M ${x + 18} ${getQubitY(qubit) - 23} l -6 -10 l 12 0 z`}
                       fill="#ef4444"
                       stroke="#fff"
                       strokeWidth={1}
                     />
-                    {/* Exclamation mark */}
+                    {}
                     <text
                       x={x + 18}
                       y={getQubitY(qubit) - 26}
@@ -806,7 +766,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                     >
                       !
                     </text>
-                    {/* Error type label */}
+                    {}
                     <text
                       x={x + 18}
                       y={getQubitY(qubit) - 12}
@@ -820,7 +780,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                     </text>
                   </g>
                 )}
-                {/* Error probability indicator (only if no error occurred yet) */}
+                {}
                 {!errorOnThisQubit && customGate.errorProbability > 0 && (
                 <text
                   x={x}
@@ -839,15 +799,14 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
           });
         })}
 
-        {/* Gates */}
+        {}
         {shiftedGates.map((gate, idx) => {
           const x = getColumnX(gate.column);
-          // Gate is active if it's been executed (column < currentStep)
+          
           const isExecuted = currentStep === undefined || gate.column < currentStep;
           const isCurrent = gate.column === currentColumnIndex;
           const isActive = isExecuted || isCurrent;
           
-          // Handle CNOT/CZ (two-qubit gates)
           if ((gate.name.includes('CNOT') || gate.name === 'CZ') && gate.qubits.length === 2) {
             return (
               <CNOTGate
@@ -861,7 +820,6 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             );
           }
           
-          // Handle measurement (including syndrome)
           if (gate.name === 'M' || gate.name.startsWith('S:')) {
             return (
               <MeasurementGate
@@ -874,7 +832,6 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             );
           }
           
-          // Single-qubit gates
           return gate.qubits.map((qubit, qIdx) => (
             <GateBox
               key={`${idx}-${qIdx}`}
@@ -887,7 +844,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
           ));
         })}
         
-        {/* Progress indicator line */}
+        {}
         {shiftedGates.length > 0 && currentColumnIndex >= 0 && (
           <line
             x1={padding.left - 15}
@@ -900,7 +857,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
           />
         )}
         
-        {/* Current step highlight - box around current gate */}
+        {}
         {currentColumnIndex >= 0 && currentColumnIndex < baseNumColumns && (
           <motion.rect
             x={getColumnX(currentColumnIndex) - columnWidth / 2 + 2}
@@ -919,7 +876,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
         </g>
       </svg>
       
-      {/* Droppable zones - visible and interactive only when dragging or in drop mode */}
+      {}
       {isDroppable && (
         <>
           {Array.from({ length: numQubits }, (_, i) => {
@@ -930,7 +887,6 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
             const zoneLeft = 16 + padding.left - 20;
             const zoneWidth = width - padding.left - padding.right + 40;
             
-            // Ancilla qubits are protected - show disabled state
             if (isAncilla) {
               return (
                 <div
@@ -945,7 +901,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                     border: '1px dashed rgba(239, 68, 68, 0.3)',
                     borderRadius: '6px',
                     zIndex: 20,
-                    pointerEvents: 'none', // Disable drop
+                    pointerEvents: 'none', 
                     opacity: 0.5
                   }}
                 >
@@ -1007,7 +963,7 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
                   }
                 }}
               >
-                {/* Label for qubit */}
+                {}
                 {isDragging && (
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-cyan-400 font-mono">
                     {qubitLabels?.[i] ?? `q${i}`}
@@ -1022,9 +978,6 @@ export const QuantumCircuit: React.FC<QuantumCircuitProps> = ({
   );
 };
 
-/**
- * Helper function to generate phase labels data
- */
 function generatePhaseLabels(
   steps: QuantumStep[], 
   columnWidth: number, 
@@ -1033,15 +986,13 @@ function generatePhaseLabels(
   customGatesInfo?: { start: number; count: number }
 ): Array<{ name: string; start: number; end: number; color: string; centerX: number; startX: number; endX: number }> {
   const phases: Array<{ name: string; start: number; end: number; color: string }> = [];
-  // INIT phase should always be visible and should span the whole initialization prefix
-  // (in our simulator, init/encoding gates are logged as type 'encode' at the beginning).
+  
   const INIT_NAME = 'INIT\n|0⟩';
   let initEndColumn = 0;
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
     const desc = step.description.toLowerCase();
-
-    // Skip auto-applied gate-steps
+    
     const isAutoAppliedGate =
       step.type === 'gate' &&
       (desc.includes('(noise)') ||
@@ -1057,8 +1008,7 @@ function generatePhaseLabels(
       initEndColumn = Math.max(initEndColumn, col);
       continue;
     }
-
-    // Stop once we hit the first visible non-encode step
+    
     break;
   }
 
@@ -1066,17 +1016,14 @@ function generatePhaseLabels(
   let currentPhase: string | null = INIT_NAME;
   let phaseStartColumn: number | null = 0;
   let phaseEndColumn: number | null = initEndColumn;
-  let initCreated = true; // INIT already created above
+  let initCreated = true; 
   
   steps.forEach((step, stepIdx) => {
     let phaseName = '';
     let phaseColor = '#475569';
     
-    // Determine phase from step type and description
     const desc = step.description.toLowerCase();
-
-    // Skip auto-applied gate-steps like "Apply X₁ (correction)..."
-    // BUT keep noise gates "Apply X0 (noise)..." as they should be visualized
+    
     const isAutoAppliedGate =
       step.type === 'gate' &&
       (desc.includes('(correction)') ||
@@ -1085,74 +1032,68 @@ function generatePhaseLabels(
       return;
     }
     
-    // INIT: logStep с initialize/init - всегда показываем |0⟩ (только один раз)
     if (step.type === 'encode' && (desc.includes('initialize') || desc.includes('init'))) {
       if (initCreated) {
-        return; // Skip - INIT уже создан
+        return; 
       }
       phaseName = 'INIT\n|0⟩';
       phaseColor = '#22c55e';
-      initCreated = true; // Помечаем, что INIT создан
+      initCreated = true; 
     }
-    // Пропускаем другие logStep('encode', 'Encoded...') 
+    
     else if (step.type === 'encode' && !desc.includes('initialize')) {
-      return; // Skip - информационные сообщения
+      return; 
     }
-    // Gates used for syndrome extraction should belong to MEASUREMENT phase, not ENCODE
+    
     else if (step.type === 'gate' && desc.includes('(syndrome)')) {
       phaseName = 'MEASUREMENT';
       phaseColor = '#a855f7';
     }
-    // ENCODE: все остальные gate операции (H, CNOT, и т.д.)
+    
     else if (step.type === 'gate') {
       phaseName = 'ENCODE';
       phaseColor = '#3b82f6';
     }
-    // NOISE/ERROR
+    
     else if (step.type === 'noise' || step.type === 'gate-error') {
-      phaseName = 'NOISE/\nERROR'; // Перенос строки для лучшего отображения
+      phaseName = 'NOISE/\nERROR'; 
       phaseColor = '#ef4444';
     } else if (step.type === 'measurement') {
       phaseName = 'MEASUREMENT';
       phaseColor = '#a855f7';
     } else if (step.type === 'correction') {
-      phaseName = 'CORR'; // Shortened to fit in block
+      phaseName = 'CORR'; 
       phaseColor = '#10b981';
     }
     
-    // Skip if no phase name
     if (!phaseName) return;
     
-    // Get column for this step
     let column: number;
     if (phaseName.startsWith('INIT')) {
-      // INIT всегда в колонке 0 (зарезервированная колонка)
+      
       column = 0;
     } else {
-      // Для остальных - из маппинга
+      
       const mappedColumn = stepToColumnMap.get(stepIdx);
       if (mappedColumn === undefined) {
-        // Если шаг не в маппинге, значит он не был добавлен в parseStepsToGates
-        // (например, это просто лог без визуального представления)
-        // Пропускаем такой шаг для создания фазы
+        
         return;
       }
       column = mappedColumn;
     }
     
-    // If this is a new phase
     if (phaseName !== currentPhase) {
-      // Close previous phase if exists
+      
       if (currentPhase !== null && phases.length > 0 && phaseEndColumn !== null) {
         phases[phases.length - 1].end = phaseEndColumn;
       }
-      // Start new phase
+      
       currentPhase = phaseName;
       phaseStartColumn = column;
       phaseEndColumn = column;
       phases.push({ name: phaseName, start: column, end: column, color: phaseColor });
     } else {
-      // Continue current phase - extend end to current column
+      
       if (phases.length > 0) {
         phases[phases.length - 1].end = column;
       }
@@ -1160,24 +1101,22 @@ function generatePhaseLabels(
     }
   });
   
-  // Add phase for custom gates if present
   if (customGatesInfo && customGatesInfo.count > 0) {
     phases.push({
       name: 'GATES',
       start: customGatesInfo.start,
       end: customGatesInfo.start + customGatesInfo.count - 1,
-      color: '#f59e0b' // Orange color for user gates
+      color: '#f59e0b' 
     });
   }
   
   const getColumnX = (column: number) => padding.left + column * columnWidth + columnWidth / 2;
   
   return phases.map((phase, idx) => {
-    // Add gap between phases to prevent overlapping
-    const leftMargin = idx > 0 ? 20 : 0; // 20px gap on the left (except first)
-    const rightMargin = idx < phases.length - 1 ? 20 : 0; // 20px gap on the right (except last)
     
-    // Увеличено расширение блоков для размещения длинных слов типа "CORRECTION"
+    const leftMargin = idx > 0 ? 20 : 0; 
+    const rightMargin = idx < phases.length - 1 ? 20 : 0; 
+    
     const startX = getColumnX(phase.start) - 45 + leftMargin;
     const endX = getColumnX(phase.end) + 45 - rightMargin;
     const centerX = (startX + endX) / 2;
@@ -1185,9 +1124,6 @@ function generatePhaseLabels(
   });
 }
 
-/**
- * Phase/Stage labels component for export (not used in main circuit now)
- */
 export const PhaseLabels: React.FC<{
   steps: QuantumStep[];
   width: number;
@@ -1229,9 +1165,6 @@ export const PhaseLabels: React.FC<{
   );
 };
 
-/**
- * Vertical legend (for sidebar)
- */
 export const CircuitLegend: React.FC = () => {
   const items = [
     { color: GATE_COLORS.X, label: 'X (Bit-flip)' },
@@ -1261,4 +1194,3 @@ export const CircuitLegend: React.FC = () => {
 };
 
 export default QuantumCircuit;
-

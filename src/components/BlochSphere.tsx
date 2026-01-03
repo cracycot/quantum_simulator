@@ -1,13 +1,10 @@
-/**
- * 3D Bloch Sphere Visualization using Three.js
- */
 import React, { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface BlochSphereProps {
-  coordinates: [number, number, number]; // [x, y, z] on Bloch sphere
+  coordinates: [number, number, number]; 
   label?: string;
   size?: number;
   showAxes?: boolean;
@@ -32,8 +29,7 @@ function SphereContent({ coordinates, showAxes, showLabels, animated }: SphereCo
       current.lerp(targetPos, 0.1);
     }
   });
-
-  // Normalize coordinates to ensure they're on the sphere surface
+  
   const [x, y, z] = coordinates;
   const magnitude = Math.sqrt(x * x + y * y + z * z);
   const normalizedCoords: [number, number, number] = magnitude > 0.01 
@@ -42,7 +38,7 @@ function SphereContent({ coordinates, showAxes, showLabels, animated }: SphereCo
 
   return (
     <>
-      {/* Transparent sphere */}
+      {}
       <mesh>
         <sphereGeometry args={[1, 32, 32]} />
         <meshBasicMaterial 
@@ -53,7 +49,7 @@ function SphereContent({ coordinates, showAxes, showLabels, animated }: SphereCo
         />
       </mesh>
 
-      {/* Wireframe sphere */}
+      {}
       <mesh>
         <sphereGeometry args={[1, 16, 16]} />
         <meshBasicMaterial 
@@ -64,7 +60,7 @@ function SphereContent({ coordinates, showAxes, showLabels, animated }: SphereCo
         />
       </mesh>
 
-      {/* Equator circle */}
+      {}
       <Line
         points={Array.from({ length: 65 }, (_, i) => {
           const angle = (i / 64) * Math.PI * 2;
@@ -76,22 +72,22 @@ function SphereContent({ coordinates, showAxes, showLabels, animated }: SphereCo
         opacity={0.5}
       />
 
-      {/* Axes */}
+      {}
       {showAxes && (
         <>
-          {/* X axis (red) */}
+          {}
           <Line
             points={[[-1.3, 0, 0], [1.3, 0, 0]]}
             color="#ef4444"
             lineWidth={2}
           />
-          {/* Y axis (green) */}
+          {}
           <Line
             points={[[0, -1.3, 0], [0, 1.3, 0]]}
             color="#22c55e"
             lineWidth={2}
           />
-          {/* Z axis (blue) */}
+          {}
           <Line
             points={[[0, 0, -1.3], [0, 0, 1.3]]}
             color="#3b82f6"
@@ -100,7 +96,7 @@ function SphereContent({ coordinates, showAxes, showLabels, animated }: SphereCo
         </>
       )}
 
-      {/* Axis labels */}
+      {}
       {showLabels && (
         <>
           <Text position={[1.5, 0, 0]} fontSize={0.2} color="#ef4444">X</Text>
@@ -110,27 +106,27 @@ function SphereContent({ coordinates, showAxes, showLabels, animated }: SphereCo
         </>
       )}
 
-      {/* State vector (arrow) */}
+      {}
       <group ref={arrowRef} position={animated ? [0, 0, 1] : normalizedCoords}>
-        {/* Arrow line */}
+        {}
         <Line
           points={[[0, 0, 0], [...normalizedCoords.map(c => -c)] as [number, number, number]]}
           color="#f59e0b"
           lineWidth={3}
         />
-        {/* Arrow head (cone) */}
+        {}
         <mesh position={[0, 0, 0]}>
           <coneGeometry args={[0.08, 0.2, 8]} />
           <meshBasicMaterial color="#f59e0b" />
         </mesh>
-        {/* Sphere at tip */}
+        {}
         <mesh position={[0, 0, 0]}>
           <sphereGeometry args={[0.1, 16, 16]} />
           <meshBasicMaterial color="#fbbf24" />
         </mesh>
       </group>
 
-      {/* Origin to state projection on XY plane */}
+      {}
       <Line
         points={[
           [0, 0, 0],
@@ -143,7 +139,7 @@ function SphereContent({ coordinates, showAxes, showLabels, animated }: SphereCo
         dashed
       />
 
-      {/* Projection to state */}
+      {}
       <Line
         points={[
           [normalizedCoords[0], normalizedCoords[1], 0],
@@ -197,7 +193,7 @@ export const BlochSphere: React.FC<BlochSphereProps> = ({
         />
       </Canvas>
       
-      {/* Coordinates display */}
+      {}
       <div className="absolute bottom-2 right-2 z-10 px-2 py-1 bg-slate-800/80 rounded text-xs text-slate-400 font-mono">
         <div>x: {coordinates[0].toFixed(3)}</div>
         <div>y: {coordinates[1].toFixed(3)}</div>
@@ -207,9 +203,6 @@ export const BlochSphere: React.FC<BlochSphereProps> = ({
   );
 };
 
-/**
- * Multiple Bloch spheres in a grid
- */
 interface BlochSphereGridProps {
   coordinates: Map<number, [number, number, number]>;
   labels?: Map<number, string>;
@@ -245,4 +238,3 @@ export const BlochSphereGrid: React.FC<BlochSphereGridProps> = ({
 };
 
 export default BlochSphere;
-

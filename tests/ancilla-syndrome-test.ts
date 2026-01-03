@@ -8,12 +8,8 @@ function assertSyndrome(actual: [number, number], expected: [number, number], la
   }
 }
 
-// This test validates honest syndrome extraction with 2 ancillas:
-// S1 = Z0Z1 via a0, S2 = Z1Z2 via a1.
-// Syndrome mapping for single X error:
-// (1,0)->q0, (1,1)->q1, (0,1)->q2
 (() => {
-  // X on q0
+  
   {
     const system = create5QubitRepetitionSystem();
     system.initializeLogicalZero();
@@ -21,8 +17,7 @@ function assertSyndrome(actual: [number, number], expected: [number, number], la
     const syn = measureSyndromeRepetition(system);
     assertSyndrome(syn, [1, 0], 'X on q0');
   }
-
-  // X on q1
+  
   {
     const system = create5QubitRepetitionSystem();
     system.initializeLogicalZero();
@@ -30,8 +25,7 @@ function assertSyndrome(actual: [number, number], expected: [number, number], la
     const syn = measureSyndromeRepetition(system);
     assertSyndrome(syn, [1, 1], 'X on q1');
   }
-
-  // X on q2
+  
   {
     const system = create5QubitRepetitionSystem();
     system.initializeLogicalZero();
@@ -42,5 +36,3 @@ function assertSyndrome(actual: [number, number], expected: [number, number], la
 
   console.log('ancilla-syndrome-test: OK');
 })();
-
-

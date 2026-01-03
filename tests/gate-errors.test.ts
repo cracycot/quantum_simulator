@@ -1,8 +1,3 @@
-/**
- * Тесты для функциональности Gate Errors
- * Проверяем, что ошибки гейтов применяются правильно с заданной вероятностью
- */
-
 import { QECSimulator } from '../src/core/simulator';
 import type { SimulatorConfig } from '../src/core/simulator';
 import type { GateErrorConfig } from '../src/core/noise/gateErrors';
@@ -11,9 +6,6 @@ import { getLogicalZeroState } from '../src/core/codes/repetition';
 console.log('\n🧪 ТЕСТИРОВАНИЕ GATE ERRORS');
 console.log('═'.repeat(70));
 
-// ============================================
-// ТЕСТ 1: Gate Errors выключены (baseline)
-// ============================================
 console.log('\n🧪 ТЕСТ 1: Gate Errors выключены (контрольный тест)');
 console.log('━'.repeat(70));
 
@@ -48,14 +40,10 @@ const targetState1 = getLogicalZeroState();
 const fidelity1 = result1.system.state.fidelity(targetState1);
 console.log(`✓ Fidelity с |0⟩_L: ${(fidelity1 * 100).toFixed(2)}%`);
 
-// Без gate errors и без шума fidelity должна быть идеальной
 const test1Passed = fidelity1 > 0.99;
 console.log(`\n${test1Passed ? '✅ ТЕСТ 1 ПРОЙДЕН' : '❌ ТЕСТ 1 НЕ ПРОЙДЕН'}`);
 console.log(`Ожидалось: fidelity ≈ 100% (нет ошибок), Получено: ${(fidelity1 * 100).toFixed(2)}%`);
 
-// ============================================
-// ТЕСТ 2: Gate Errors с вероятностью 0% (должно быть идентично тесту 1)
-// ============================================
 console.log('\n🧪 ТЕСТ 2: Gate Errors включены с вероятностью 0%');
 console.log('━'.repeat(70));
 
@@ -91,16 +79,13 @@ const test2Passed = fidelity2 > 0.99;
 console.log(`\n${test2Passed ? '✅ ТЕСТ 2 ПРОЙДЕН' : '❌ ТЕСТ 2 НЕ ПРОЙДЕН'}`);
 console.log(`Ожидалось: fidelity ≈ 100% (p=0%), Получено: ${(fidelity2 * 100).toFixed(2)}%`);
 
-// ============================================
-// ТЕСТ 3: Gate Errors с вероятностью 100% (гарантированные ошибки)
-// ============================================
 console.log('\n🧪 ТЕСТ 3: Gate Errors с вероятностью 100% (гарантированные ошибки)');
 console.log('━'.repeat(70));
 
 const gateErrorConfig100: GateErrorConfig = {
   enabled: true,
   type: 'bit-flip',
-  probability: 1.0, // 100%
+  probability: 1.0, 
   applyTo: 'single-qubit'
 };
 
@@ -123,13 +108,11 @@ console.log('✓ Gate Errors: ВКЛЮЧЕНЫ (p=100%)');
 console.log('✓ Тип ошибки: bit-flip (X)');
 console.log('✓ Область применения: однокубитные гейты');
 
-// Проверим лог на наличие gate errors
 const gateErrorSteps = result3.steps.filter(step => 
   step.type === 'gate-error' && step.gateErrorDetails
 );
 console.log(`✓ Количество gate errors: ${gateErrorSteps.length}`);
 
-// При 100% вероятности должны быть gate errors
 const hasGateErrors = gateErrorSteps.length > 0;
 console.log(`✓ Gate errors обнаружены: ${hasGateErrors ? '✅ ДА' : '❌ НЕТ'}`);
 
@@ -149,16 +132,13 @@ console.log(`\n${test3Passed ? '✅ ТЕСТ 3 ПРОЙДЕН' : '❌ ТЕСТ 3
 console.log(`Ожидалось: gate errors присутствуют при p=100%`);
 console.log(`Получено: ${gateErrorSteps.length} gate error(s)`);
 
-// ============================================
-// ТЕСТ 4: Статистическая проверка вероятности 10%
-// ============================================
 console.log('\n🧪 ТЕСТ 4: Статистическая проверка (p=10%, множество прогонов)');
 console.log('━'.repeat(70));
 
 const gateErrorConfig10: GateErrorConfig = {
   enabled: true,
   type: 'bit-flip',
-  probability: 0.1, // 10%
+  probability: 0.1, 
   applyTo: 'all'
 };
 
@@ -184,17 +164,15 @@ for (let i = 0; i < numRuns; i++) {
   const sim = new QECSimulator(test4Config);
   const result = sim.runFullCycle();
   
-  // Подсчитываем gate errors
   const errorSteps = result.steps.filter(step => step.type === 'gate-error');
   totalGateErrors += errorSteps.length;
   
-  // Подсчитываем общее количество гейтов
   totalGates += result.steps.length;
 }
 
 const observedProbability = totalGates > 0 ? totalGateErrors / totalGates : 0;
 const expectedProbability = 0.1;
-const tolerance = 0.05; // ±5%
+const tolerance = 0.05; 
 
 console.log(`✓ Всего гейтов выполнено: ${totalGates}`);
 console.log(`✓ Всего gate errors: ${totalGateErrors}`);
@@ -204,14 +182,11 @@ console.log(`✓ Ожидаемая вероятность: ${(expectedProbabili
 const probabilityMatch = Math.abs(observedProbability - expectedProbability) < tolerance;
 console.log(`✓ Соответствие (±${(tolerance * 100).toFixed(0)}%): ${probabilityMatch ? '✅ ДА' : '⚠️ НЕТ (возможны статистические отклонения)'}`);
 
-const test4Passed = observedProbability > 0 && observedProbability < 0.2; // Между 0% и 20%
+const test4Passed = observedProbability > 0 && observedProbability < 0.2; 
 console.log(`\n${test4Passed ? '✅ ТЕСТ 4 ПРОЙДЕН' : '❌ ТЕСТ 4 НЕ ПРОЙДЕН'}`);
 console.log(`Ожидалось: вероятность близка к 10% (с учетом статистики)`);
 console.log(`Получено: ${(observedProbability * 100).toFixed(2)}%`);
 
-// ============================================
-// ТЕСТ 5: Разные типы gate errors (bit-flip, phase-flip, depolarizing)
-// ============================================
 console.log('\n🧪 ТЕСТ 5: Разные типы gate errors');
 console.log('━'.repeat(70));
 
@@ -237,7 +212,7 @@ for (const errorType of errorTypes) {
     gateErrorConfig: {
       enabled: true,
       type: errorType,
-      probability: 1.0, // 100% для гарантированного обнаружения
+      probability: 1.0, 
       applyTo: 'all'
     }
   };
@@ -268,9 +243,6 @@ console.log(`\n${test5Passed ? '✅ ТЕСТ 5 ПРОЙДЕН' : '❌ ТЕСТ 5
 console.log(`Ожидалось: все типы gate errors работают корректно`);
 console.log(`Получено: ${test5Results.filter(r => r.passed).length}/${test5Results.length} типов работают`);
 
-// ============================================
-// ТЕСТ 6: Gate Errors в коде Шора (9 кубитов)
-// ============================================
 console.log('\n🧪 ТЕСТ 6: Gate Errors в коде Шора (9 кубитов)');
 console.log('━'.repeat(70));
 
@@ -286,7 +258,7 @@ const test6Config: SimulatorConfig = {
   gateErrorConfig: {
     enabled: true,
     type: 'bit-flip',
-    probability: 0.15, // 15%
+    probability: 0.15, 
     applyTo: 'all'
   }
 };
@@ -306,13 +278,9 @@ console.log(`\n${test6Passed ? '✅ ТЕСТ 6 ПРОЙДЕН' : '❌ ТЕСТ 6
 console.log(`Ожидалось: gate errors работают в коде Шора`);
 console.log(`Получено: ${gateErrors6.length} gate error(s)`);
 
-// ============================================
-// ТЕСТ 7: Влияние gate errors на коррекцию
-// ============================================
 console.log('\n🧪 ТЕСТ 7: Влияние gate errors на успешность коррекции');
 console.log('━'.repeat(70));
 
-// Запускаем много раз с gate errors и проверяем, как это влияет на fidelity
 const numRuns7 = 30;
 let successCount = 0;
 
@@ -323,12 +291,12 @@ const test7Config: SimulatorConfig = {
     type: 'bit-flip',
     probability: 0,
     mode: 'exact-count',
-    exactCount: 1 // Одна X-ошибка (код должен исправить)
+    exactCount: 1 
   },
   gateErrorConfig: {
     enabled: true,
     type: 'bit-flip',
-    probability: 0.05, // 5% gate errors
+    probability: 0.05, 
     applyTo: 'all'
   }
 };
@@ -354,15 +322,11 @@ const successRate = successCount / numRuns7;
 console.log(`✓ Средняя fidelity: ${(avgFidelity * 100).toFixed(2)}%`);
 console.log(`✓ Успешных коррекций (fidelity>95%): ${successCount}/${numRuns7} (${(successRate * 100).toFixed(0)}%)`);
 
-// Gate errors должны немного снижать успешность, но не критично при p=5%
-const test7Passed = successRate > 0.5; // Хотя бы 50% должны быть успешными
+const test7Passed = successRate > 0.5; 
 console.log(`\n${test7Passed ? '✅ ТЕСТ 7 ПРОЙДЕН' : '❌ ТЕСТ 7 НЕ ПРОЙДЕН'}`);
 console.log(`Ожидалось: gate errors влияют на коррекцию, но не разрушают её полностью`);
 console.log(`Получено: ${(successRate * 100).toFixed(0)}% успешных коррекций`);
 
-// ============================================
-// ИТОГОВЫЙ ОТЧЁТ
-// ============================================
 console.log('\n');
 console.log('═'.repeat(70));
 console.log('📊 ИТОГОВЫЙ ОТЧЁТ: GATE ERRORS');
@@ -400,6 +364,4 @@ if (passedCount === totalCount) {
 console.log('═'.repeat(70));
 console.log('\n');
 
-// Экспорт для использования
 export { allTests, passedCount, totalCount };
-

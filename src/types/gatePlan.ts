@@ -7,6 +7,3 @@ export interface CustomGateStep {
   errorType: GateErrorType;
   applyTo?: GateErrorScope;
 }
-
-
-

@@ -187,10 +187,10 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  white-space: pre-line; /* Поддержка переноса строки */
-  line-height: 1.2; /* Улучшенный межстрочный интервал */
-  text-align: center; /* Центрирование текста */
-  display: inline-block; /* Для правильного отображения переноса */
+  white-space: pre-line; 
+  line-height: 1.2; 
+  text-align: center; 
+  display: inline-block; 
 }
 
 .phase-gate {
@@ -276,7 +276,10 @@
   border-radius: 4px;
   display: block;
   overflow-x: auto;
-  white-space: nowrap;
+  white-space: pre-wrap; 
+  word-break: break-all; 
+  max-width: 100%;
+  line-height: 1.5; 
 }
 
 .transform-arrow {
@@ -340,7 +343,6 @@
   font-style: italic;
 }
 
-/* Scrollbar styling */
 .transformation-view::-webkit-scrollbar {
   width: 8px;
 }

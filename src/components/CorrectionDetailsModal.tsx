@@ -1,7 +1,3 @@
-/**
- * Correction Details Modal Component
- * Shows step-by-step error correction process with LaTeX formulas
- */
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -28,9 +24,6 @@ interface CorrectionDetailsModalProps {
   fidelityAfter?: number;
 }
 
-/**
- * Safe LaTeX renderer with fallback
- */
 const SafeLatex: React.FC<{ formula: string; block?: boolean }> = ({ formula, block = false }) => {
   try {
     if (block) {
@@ -42,9 +35,6 @@ const SafeLatex: React.FC<{ formula: string; block?: boolean }> = ({ formula, bl
   }
 };
 
-/**
- * Step item in the correction process
- */
 const CorrectionStep: React.FC<{
   number: number;
   title: string;
@@ -61,10 +51,10 @@ const CorrectionStep: React.FC<{
       transition={{ delay: number * 0.1 }}
       className={`relative pl-8 pb-6 ${isActive ? 'opacity-100' : 'opacity-80'}`}
     >
-      {/* Timeline line */}
+      {}
       <div className="absolute left-3 top-6 bottom-0 w-0.5 bg-slate-700" />
       
-      {/* Step number/icon */}
+      {}
       <div className={`absolute left-0 top-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
         isComplete 
           ? 'bg-emerald-500 text-white' 
@@ -75,7 +65,7 @@ const CorrectionStep: React.FC<{
         {isComplete ? <CheckCircle className="w-4 h-4" /> : icon || number}
       </div>
       
-      {/* Content */}
+      {}
       <div className="ml-4">
         <h4 className="text-sm font-semibold text-white mb-1">{title}</h4>
         <p className="text-xs text-slate-400 mb-2">{description}</p>
@@ -99,12 +89,11 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
   fidelityBefore,
   fidelityAfter
 }) => {
-  // Find relevant steps
+  
   const gateErrorSteps = steps.filter(s => s.type === 'gate-error' || s.type === 'noise');
   const syndromeSteps = steps.filter(s => s.type === 'measurement');
   const correctionSteps = steps.filter(s => s.type === 'correction');
   
-  // Generate syndrome interpretation
   const getSyndromeInterpretation = () => {
     if (codeType === 'repetition') {
       const [s1, s2] = syndrome;
@@ -118,7 +107,6 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
   
   const syndromeInfo = getSyndromeInterpretation();
   
-  // Generate LaTeX for syndrome measurement
   const getSyndromeLatex = () => {
     if (codeType === 'repetition') {
       return `S_1 = Z_0 Z_1 = ${syndrome[0]}, \\quad S_2 = Z_1 Z_2 = ${syndrome[1]}`;
@@ -126,7 +114,6 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
     return `S = (${syndrome.join(', ')})`;
   };
   
-  // Generate LaTeX for correction
   const getCorrectionLatex = () => {
     if (correctedQubits.length === 0) {
       return 'I|\\psi\\rangle \\text{ (идентичность - коррекция не нужна)}';
@@ -152,7 +139,7 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
             onClick={(e) => e.stopPropagation()}
             className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 max-w-2xl w-full border border-cyan-500/30 shadow-2xl shadow-cyan-500/10 max-h-[90vh] overflow-y-auto"
           >
-            {/* Header */}
+            {}
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 <Activity className="w-6 h-6 text-cyan-400" />
@@ -166,7 +153,7 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
               </button>
             </div>
 
-            {/* Summary cards */}
+            {}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               <div className="bg-slate-900/50 rounded-lg p-3 text-center">
                 <div className="text-xs text-slate-500 mb-1">Код</div>
@@ -194,7 +181,7 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
               </div>
             </div>
 
-            {/* Fidelity comparison */}
+            {}
             {fidelityBefore !== undefined && fidelityAfter !== undefined && (
               <div className="bg-slate-900/50 rounded-lg p-4 mb-6">
                 <div className="text-sm text-slate-400 mb-2">Точность (Fidelity)</div>
@@ -224,11 +211,11 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
               </div>
             )}
 
-            {/* Step-by-step process */}
+            {}
             <div className="space-y-2">
               <h3 className="text-sm font-semibold text-slate-300 mb-4">Шаги коррекции</h3>
               
-              {/* Step 1: Error occurred */}
+              {}
               <CorrectionStep
                 number={1}
                 title="Возникновение ошибки"
@@ -244,7 +231,7 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
                 icon={<Zap className="w-3 h-3" />}
               />
               
-              {/* Step 2: Syndrome measurement */}
+              {}
               <CorrectionStep
                 number={2}
                 title="Измерение синдрома"
@@ -254,7 +241,7 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
                 icon={<Gauge className="w-3 h-3" />}
               />
               
-              {/* Step 3: Error identification */}
+              {}
               <CorrectionStep
                 number={3}
                 title="Идентификация ошибки"
@@ -270,7 +257,7 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
                 icon={<AlertTriangle className="w-3 h-3" />}
               />
               
-              {/* Step 4: Correction */}
+              {}
               <CorrectionStep
                 number={4}
                 title="Применение коррекции"
@@ -284,7 +271,7 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
               />
             </div>
 
-            {/* Mathematical explanation */}
+            {}
             <div className="mt-6 p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
               <h4 className="text-sm font-semibold text-cyan-300 mb-2">Математическое описание</h4>
               <div className="text-xs text-slate-400 space-y-2">
@@ -308,7 +295,7 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
               </div>
             </div>
 
-            {/* Close button */}
+            {}
             <div className="mt-6 flex justify-end">
               <button
                 onClick={onClose}
@@ -325,4 +312,3 @@ export const CorrectionDetailsModal: React.FC<CorrectionDetailsModalProps> = ({
 };
 
 export default CorrectionDetailsModal;
-

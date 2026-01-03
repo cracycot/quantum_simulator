@@ -1,6 +1,3 @@
-/**
- * Quantum State Display Component
- */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Atom, Activity, Target } from 'lucide-react';
@@ -25,7 +22,7 @@ export const StateDisplay: React.FC<StateDisplayProps> = ({
   showAmplitudes = true,
   threshold = 0.01
 }) => {
-  // Get significant basis states
+  
   const significantStates = [];
   for (let i = 0; i < state.dimension; i++) {
     const prob = state.amplitudes[i].absSquared();
@@ -38,8 +35,7 @@ export const StateDisplay: React.FC<StateDisplayProps> = ({
       });
     }
   }
-
-  // Sort by probability
+  
   significantStates.sort((a, b) => b.probability - a.probability);
 
   return (
@@ -52,7 +48,7 @@ export const StateDisplay: React.FC<StateDisplayProps> = ({
       )}
 
       <div className="p-4">
-        {/* State vector representation */}
+        {}
         <div className="mb-4 p-3 bg-slate-900/50 rounded-lg font-mono text-sm">
           <span className="text-slate-500">|ψ⟩ = </span>
           {significantStates.map((s, idx) => (
@@ -67,7 +63,7 @@ export const StateDisplay: React.FC<StateDisplayProps> = ({
           )}
         </div>
 
-        {/* Probability bars */}
+        {}
         {showProbabilities && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs text-slate-400 mb-2">
@@ -103,7 +99,7 @@ export const StateDisplay: React.FC<StateDisplayProps> = ({
           </div>
         )}
 
-        {/* Amplitude details */}
+        {}
         {showAmplitudes && (
           <div className="mt-4 pt-4 border-t border-slate-700">
             <div className="flex items-center gap-2 text-xs text-slate-400 mb-2">
@@ -132,9 +128,6 @@ export const StateDisplay: React.FC<StateDisplayProps> = ({
   );
 };
 
-/**
- * Logical qubit state indicator
- */
 interface LogicalStateIndicatorProps {
   fidelityZero: number;
   fidelityOne: number;
@@ -200,9 +193,6 @@ export const LogicalStateIndicator: React.FC<LogicalStateIndicatorProps> = ({
   );
 };
 
-/**
- * Compact state summary
- */
 interface StateSummaryProps {
   beforeState?: StateVector;
   afterState?: StateVector;
@@ -249,4 +239,3 @@ export const StateSummary: React.FC<StateSummaryProps> = ({
 };
 
 export default StateDisplay;
-

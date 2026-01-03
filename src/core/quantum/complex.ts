@@ -1,6 +1,3 @@
-/**
- * Complex number implementation for quantum computations
- */
 export class Complex {
   constructor(public re: number, public im: number = 0) {}
 
@@ -84,16 +81,13 @@ export class Complex {
   }
 }
 
-/**
- * State vector for multi-qubit system
- */
 export class StateVector {
   public amplitudes: Complex[];
 
   constructor(numQubits: number) {
     const size = 1 << numQubits;
     this.amplitudes = new Array(size).fill(null).map(() => Complex.zero());
-    this.amplitudes[0] = Complex.one(); // Initialize to |0...0⟩
+    this.amplitudes[0] = Complex.one(); 
   }
 
   static fromAmplitudes(amplitudes: Complex[]): StateVector {
@@ -126,17 +120,11 @@ export class StateVector {
       }
     }
   }
-
-  /**
-   * Get probability of measuring a specific basis state
-   */
+  
   probability(index: number): number {
     return this.amplitudes[index].absSquared();
   }
-
-  /**
-   * Get probability of specific qubit being |1⟩
-   */
+  
   qubitProbability(qubitIndex: number): number {
     let prob = 0;
     const mask = 1 << qubitIndex;
@@ -147,16 +135,11 @@ export class StateVector {
     }
     return prob;
   }
-
-  /**
-   * Measure specific qubit, collapsing the state
-   * Returns measurement result (0 or 1)
-   */
+  
   measureQubit(qubitIndex: number): number {
     const prob1 = this.qubitProbability(qubitIndex);
     const result = Math.random() < prob1 ? 1 : 0;
     
-    // Collapse the state
     const mask = 1 << qubitIndex;
     const newAmplitudes = this.amplitudes.map((amp, i) => {
       const qubitValue = (i & mask) ? 1 : 0;
@@ -168,17 +151,12 @@ export class StateVector {
     
     return result;
   }
-
-  /**
-   * Get Bloch sphere coordinates for a single qubit (if isolated) or reduced density matrix
-   * Returns [x, y, z] coordinates on Bloch sphere
-   */
+  
   getBlochCoordinates(qubitIndex: number): [number, number, number] {
-    // Compute reduced density matrix for single qubit
+    
     const n = this.numQubits;
     const mask = 1 << qubitIndex;
     
-    // ρ_00, ρ_01, ρ_10, ρ_11 for the reduced density matrix
     let rho00 = Complex.zero();
     let rho01 = Complex.zero();
     let rho11 = Complex.zero();
@@ -188,7 +166,7 @@ export class StateVector {
       const amp_i = this.amplitudes[i];
       
       for (let j = 0; j < this.dimension; j++) {
-        // Check if i and j differ only in the target qubit
+        
         const jQubitVal = (j & mask) ? 1 : 0;
         if ((i ^ j) === (qubitVal ^ jQubitVal) * mask) {
           const amp_j = this.amplitudes[j];
@@ -205,14 +183,8 @@ export class StateVector {
       }
     }
     
-    // Bloch coordinates from density matrix
-    // ρ = (I + x*X + y*Y + z*Z) / 2
-    // x = Tr(ρX) = ρ_01 + ρ_10 = 2*Re(ρ_01)
-    // y = Tr(ρY) = i(ρ_01 - ρ_10) = 2*Im(ρ_01)  (note: with proper sign)
-    // z = Tr(ρZ) = ρ_00 - ρ_11
-    
     const x = 2 * rho01.re;
-    const y = -2 * rho01.im; // Negative because Y = [[0,-i],[i,0]]
+    const y = -2 * rho01.im; 
     const z = rho00.re - rho11.re;
     
     return [x, y, z];
@@ -221,10 +193,7 @@ export class StateVector {
   clone(): StateVector {
     return StateVector.fromAmplitudes(this.amplitudes);
   }
-
-  /**
-   * Inner product ⟨this|other⟩
-   */
+  
   inner(other: StateVector): Complex {
     if (this.dimension !== other.dimension) {
       return Complex.zero();
@@ -239,27 +208,18 @@ export class StateVector {
     }
     return result;
   }
-
-  /**
-   * Fidelity with another state
-   */
+  
   fidelity(other: StateVector): number {
     if (this.dimension !== other.dimension) {
       return 0;
     }
     return this.inner(other).absSquared();
   }
-
-  /**
-   * Get basis state representation (e.g., "|000⟩", "|101⟩")
-   */
+  
   static basisStateLabel(index: number, numQubits: number): string {
     return '|' + index.toString(2).padStart(numQubits, '0') + '⟩';
   }
-
-  /**
-   * Get human-readable state representation
-   */
+  
   toString(threshold: number = 0.01): string {
     const terms: string[] = [];
     const n = this.numQubits;
@@ -275,4 +235,3 @@ export class StateVector {
     return terms.length > 0 ? terms.join(' + ') : '0';
   }
 }
-
